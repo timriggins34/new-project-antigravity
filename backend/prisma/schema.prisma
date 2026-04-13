@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                String @id @default(uuid())
+  client_id         String @unique
+  
+  // Section 1.1: Identity
+  name              String
+  nickname          String
+  clientType        String // Importer/Exporter/Both
+  constitution      String
+  status            String // Active/Inactive
+  clientSinceYear   String?
+
+  // Section 1.2: Registration
+  pan               String
+  gstin             String
+  iec               String
+  cin_llpin         String
+  tan               String
+
+  // Section 1.3: Contact
+  address           String
+  contactPerson     String
+  contactNickname   String
+  mobile            String
+  email             String
+  contact1          String
+  contact2          String?
+
+  // Section 1.4: Bank
+  bankName          String
+  branchName        String
+  accountNumber     String
+  accountType       String
+  ifsc              String
+  swift             String
+  bankAddress       String
+  adCode            String
+
+  // Section 1.5: Other
+  details           String?
+
+  docs              String // Store as stringified JSON array
+}
+
+model Vendor {
+  id         String @id @default(uuid())
+  vendor_id  String @unique
+  name       String
+  type       String
+  contact    String
+  phone      String
+  email      String
+  activeJobs String // stringified JSON array
+  pastJobs   String // stringified JSON array
+}
+
+model ClearanceJob {
+  id       String @id @default(uuid())
+  job_id   String @unique
+  client   String
+  port     String
+  type     String
+  stage    String
+  status   String
+  alert    Boolean
+  assigned String
+  date     String
+}
+
+model DocJob {
+  id     String @id @default(uuid())
+  job_id String @unique
+  client String
+  status String
+  type   String
+  docs   String // stringified JSON array
+}
+
+model LogisticsTrip {
+  id      String @id @default(uuid())
+  trip_id String @unique
+  job     String
+  truck   String
+  driver  String
+  from    String
+  to      String
+  status  String
+  eta     String
+  delayed Boolean @default(false)
+}
+
+model Licence {
+  id         String @id @default(uuid())
+  licence_id String @unique
+  client     String
+  type       String
+  status     String
+  expiry     String
+  utilized   Int?
+  alert      Boolean
+}
+
+model FreightJob {
+  id     String @id @default(uuid())
+  job_id String @unique
+  mbl    String?
+  awb    String?
+  type   String
+  pol    String
+  pod    String
+  vessel String
+  etd    String
+  eta    String
+  status String
+  alert  Boolean
+}

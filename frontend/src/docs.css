@@ -1,0 +1,178 @@
+/* Documentation Module Specific Styles */
+
+.docs-split-container {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 1.5rem;
+  height: calc(100vh - 280px); /* Fill remaining space after headers/metrics */
+  min-height: 500px;
+}
+
+/* Left Sidebar - Inbox/Jobs List */
+.docs-inbox {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 0.75rem;
+  padding: 0.25rem;
+}
+
+.doc-job-card {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-color);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.doc-job-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-job-card.active {
+  border-color: var(--primary-color);
+  background-color: var(--info-bg);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.doc-job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.doc-job-id {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.doc-job-client {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.doc-status-badge {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.doc-status-missing { background-color: var(--danger-bg); color: var(--danger-text); }
+.doc-status-review { background-color: var(--warning-bg); color: var(--warning-text); }
+.doc-status-complete { background-color: var(--success-bg); color: var(--success-text); }
+
+/* Right Panel - Document Verification View */
+.doc-viewer {
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-viewer-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.doc-viewer-title h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.doc-viewer-title p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.doc-checklist {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-color);
+  transition: var(--transition);
+}
+
+.doc-item:hover {
+  background-color: var(--surface-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-item-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.doc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background-color: var(--surface-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  color: var(--primary-color);
+}
+
+.doc-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.doc-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.doc-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-icon {
+  background: white;
+  border: 1px solid var(--border-color);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.btn-icon:hover {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  border-color: var(--text-muted);
+}
+
+.btn-icon.verify { color: var(--success-text); }
+.btn-icon.verify:hover { background-color: var(--success-bg); border-color: var(--success-text); }
+.btn-icon.reject { color: var(--danger-text); }
+.btn-icon.reject:hover { background-color: var(--danger-bg); border-color: var(--danger-text); }

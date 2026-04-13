@@ -1,0 +1,122 @@
+/* Additions for Customs Clearance Module */
+
+/* Sub-header Actions */
+.sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-pill {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.filter-pill:hover {
+  background-color: var(--bg-color);
+}
+
+.filter-pill.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* Primary Button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Stage Progress Bar */
+.stage-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.stage-step {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--border-color);
+}
+
+.stage-step.completed {
+  background-color: var(--success-text);
+}
+
+.stage-step.active {
+  background-color: var(--primary-color);
+}
+
+.stage-step.error {
+  background-color: var(--danger-text);
+}
+
+.stage-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Enhanced Table */
+.data-table-enhanced th {
+  background-color: var(--bg-color);
+}
+
+.data-table-enhanced tbody tr {
+  cursor: pointer;
+}
+
+.data-table-enhanced tbody tr:hover td {
+  background-color: var(--bg-color);
+}
+
+.table-action-menu {
+  color: var(--text-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.table-action-menu:hover {
+  background-color: var(--border-color);
+  color: var(--text-main);
+}
