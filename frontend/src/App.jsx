@@ -54,6 +54,7 @@ import SettingsModal from './SettingsModal';
 import ClearanceDetailModal from './ClearanceDetailModal';
 import FreightDetailModal from './FreightDetailModal';
 import LogisticsDetailModal from './LogisticsDetailModal';
+import DispatchModal from './DispatchModal';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -111,8 +112,6 @@ function App() {
   const [newDocName, setNewDocName] = useState('');
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [tripToDispatch, setTripToDispatch] = useState(null);
-  const [licenceUtilAmounts, setLicenceUtilAmounts] = useState({});
-  const [newDocName, setNewDocName] = useState('');
 
   const handleUpdateDocJob = async (jobId, updates) => {
     try {
@@ -276,6 +275,40 @@ function App() {
       );
       alert(`Could not advance job ${jobId}. Please try again.`);
     }
+  };
+
+  const handleDragStart = (e, tripId) => { e.dataTransfer.setData('tripId', tripId); };
+  const handleDragOver = (e) => { e.preventDefault(); };
+
+  const handleDrop = async (e, newStatus) => {
+    const tripId = e.dataTransfer.getData('tripId');
+    if (!tripId) return;
+    setLogisticsTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: newStatus } : t));
+    try {
+      await fetch(`http://localhost:3000/api/logistics/${tripId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (e) { fetchAllData(); }
+  };
+
+  const handleDispatchSubmit = async (tripId, data) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/logistics-trips/${tripId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, status: 'enroute' })
+      });
+      if (res.ok) {
+        fetchAllData();
+        return true;
+      }
+      else {
+        alert('Failed to dispatch trip');
+        return false;
+      }
+    } catch (e) { console.error(e); return false; }
   };
 
   const activeClient = clientsData.find(c => c.id === selectedClient);
@@ -515,6 +548,7 @@ function App() {
           shipment={selectedFreightJob} 
           onEdit={() => setFreightToEdit(selectedFreightJob)}
           onDelete={() => handleDeleteFreight(selectedFreightJob.id)}
+          onRefresh={fetchAllData}
         />
         <LogisticsDetailModal 
           isOpen={!!selectedLogisticsTrip} 
@@ -522,6 +556,13 @@ function App() {
           trip={selectedLogisticsTrip} 
           onEdit={() => setLogisticsToEdit(selectedLogisticsTrip)}
           onDelete={() => handleDeleteLogistics(selectedLogisticsTrip.id)}
+        />
+        <DispatchModal 
+          isOpen={isDispatchModalOpen}
+          onClose={() => setIsDispatchModalOpen(false)}
+          trip={tripToDispatch}
+          vendors={vendorsData}
+          onDispatch={handleDispatchSubmit}
         />
 
         {activeTab === 'dashboard' && (
