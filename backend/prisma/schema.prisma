@@ -48,19 +48,20 @@ model Client {
   // Section 1.5: Other
   details           String?
 
-  docs              String // Store as stringified JSON array
+  documents         Document[]
 }
 
 model Vendor {
-  id         String @id @default(uuid())
-  vendor_id  String @unique
-  name       String
-  type       String
-  contact    String
-  phone      String
-  email      String
-  activeJobs String // stringified JSON array
-  pastJobs   String // stringified JSON array
+  id            String @id @default(uuid())
+  vendor_id     String @unique
+  name          String
+  type          String
+  contact       String
+  phone         String
+  email         String
+  
+  clearanceJobs ClearanceJob[]
+  freightJobs   FreightJob[]
 }
 
 model ClearanceJob {
@@ -74,6 +75,27 @@ model ClearanceJob {
   alert    Boolean
   assigned String
   date     String
+
+  // Duty & Stage Tracking
+  icegateChallan String?
+  dutyAmount     Float?
+  penalty        Float?
+  paymentDate    DateTime?
+  oocTimestamp   DateTime?
+
+  // Relations
+  vendors      Vendor[]
+  hsCodeItems  HSCodeItem[]
+}
+
+model HSCodeItem {
+  id              String       @id @default(uuid())
+  itemName        String
+  hsCode          String
+  assessableValue Float?
+  
+  clearanceJobId  String
+  clearanceJob    ClearanceJob @relation(fields: [clearanceJobId], references: [id])
 }
 
 model DocJob {
@@ -82,7 +104,13 @@ model DocJob {
   client String
   status String
   type   String
-  docs   String // stringified JSON array
+
+  // Documentation Checklists
+  hasHardCopyBOL Boolean @default(false)
+  hasHardCopyDO  Boolean @default(false)
+
+  // Relations
+  documents      Document[]
 }
 
 model LogisticsTrip {
@@ -122,4 +150,19 @@ model FreightJob {
   eta    String
   status String
   alert  Boolean
+
+  vendors Vendor[]
+}
+
+model Document {
+  id         String    @id @default(uuid())
+  name       String
+  url        String?
+  uploadedAt DateTime  @default(now())
+  
+  clientId   String?
+  client     Client?   @relation(fields: [clientId], references: [id])
+  
+  docJobId   String?
+  docJob     DocJob?   @relation(fields: [docJobId], references: [id])
 }
