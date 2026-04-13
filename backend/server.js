@@ -209,6 +209,16 @@ app.get('/api/doc-jobs', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to fetch doc jobs' }); }
 });
 
+app.patch('/api/doc-jobs/:id', async (req, res) => {
+  try {
+    const updated = await prisma.docJob.update({
+      where: { job_id: req.params.id },
+      data: req.body
+    });
+    res.json(updated);
+  } catch (error) { res.status(500).json({ error: 'Failed to update doc job' }); }
+});
+
 // --- LOGISTICS TRIPS ---
 app.get('/api/logistics-trips', async (req, res) => {
   try { const trips = await prisma.logisticsTrip.findMany(); res.json(trips); } 
@@ -223,11 +233,28 @@ app.patch('/api/logistics/:id/status', async (req, res) => {
       where: { trip_id: req.params.id },
       data: { 
         status,
-        delayed: false // Reset delay flag on manual status update usually
+        delayed: false 
       }
     });
     res.json(updated);
   } catch (error) { res.status(500).json({ error: 'Failed to update logistics status' }); }
+});
+
+app.put('/api/logistics-trips/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const updated = await prisma.logisticsTrip.update({
+      where: { trip_id: req.params.id },
+      data: {
+        truck: data.truck,
+        driver: data.driver,
+        status: data.status,
+        eta: data.eta,
+        delayed: data.delayed
+      }
+    });
+    res.json(updated);
+  } catch (error) { res.status(500).json({ error: 'Failed to update logistics trip' }); }
 });
 
 // --- LICENCES ---
@@ -266,6 +293,21 @@ app.get('/api/freight-jobs', async (req, res) => {
     res.json(freight); 
   } 
   catch (error) { res.status(500).json({ error: 'Failed to fetch freight jobs' }); }
+});
+
+app.put('/api/freight-jobs/:id', async (req, res) => {
+  try {
+    const { vendors, ...data } = req.body;
+    const updated = await prisma.freightJob.update({
+      where: { job_id: req.params.id },
+      data: {
+        ...data,
+        vendors: vendors ? { set: vendors.map(v => ({ id: v.id })) } : undefined
+      },
+      include: { vendors: true }
+    });
+    res.json(updated);
+  } catch (error) { res.status(500).json({ error: 'Failed to update freight job' }); }
 });
 
 // Start Server

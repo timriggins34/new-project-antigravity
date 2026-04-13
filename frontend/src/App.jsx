@@ -107,6 +107,24 @@ function App() {
   const [freightToEdit, setFreightToEdit] = useState(null);
   const [logisticsToEdit, setLogisticsToEdit] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [licenceUtilAmounts, setLicenceUtilAmounts] = useState({});
+  const [newDocName, setNewDocName] = useState('');
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const [tripToDispatch, setTripToDispatch] = useState(null);
+  const [licenceUtilAmounts, setLicenceUtilAmounts] = useState({});
+  const [newDocName, setNewDocName] = useState('');
+
+  const handleUpdateDocJob = async (jobId, updates) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/doc-jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) fetchAllData();
+      else alert('Failed to update documentation details');
+    } catch (e) { console.error(e); }
+  };
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -457,6 +475,8 @@ function App() {
           onClose={() => { setIsClearanceJobModalOpen(false); setClearanceToEdit(null); }} 
           initialData={clearanceToEdit}
           onSuccess={fetchAllData} 
+          clients={clientsData}
+          vendors={vendorsData}
         />
         <LicenceFormModal 
           isOpen={isLicenceModalOpen || !!licenceToEdit} 
@@ -483,8 +503,11 @@ function App() {
           isOpen={!!selectedDetailJob} 
           onClose={() => setSelectedDetailJob(null)} 
           job={selectedDetailJob} 
+          docJobs={docJobs}
           onEdit={() => setClearanceToEdit(selectedDetailJob)}
           onDelete={() => handleDeleteClearance(selectedDetailJob.id)}
+          onAdvance={advanceJobStage}
+          onRefresh={fetchAllData}
         />
         <FreightDetailModal 
           isOpen={!!selectedFreightJob} 
@@ -761,13 +784,36 @@ function App() {
               <div className="bento-item glass-card doc-viewer" style={{ padding: 0 }}>
                 {activeDocJob ? (
                   <>
-                    <div className="doc-viewer-header">
+                    <div className="doc-viewer-header" style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                        <div className="doc-viewer-title">
                         <h3>Job #{activeDocJob.id} Details</h3>
                         <p>{activeDocJob.client} - {activeDocJob.type}</p>
                       </div>
                       <button className="btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={() => alert(`System Request: Missing documents requested from ${activeDocJob.client}`)}>Request Missing</button>
                     </div>
+
+                    {/* Hard Copy Verification Section */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(56, 189, 248, 0.05)', borderRadius: '12px', border: '1px dashed var(--info-text)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                         <input 
+                            type="checkbox" 
+                            checked={activeDocJob.hasHardCopyBOL} 
+                            onChange={(e) => handleUpdateDocJob(activeDocJob.id, { hasHardCopyBOL: e.target.checked })}
+                            style={{ width: '18px', height: '18px' }}
+                         />
+                         Original BOL Received
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                         <input 
+                            type="checkbox" 
+                            checked={activeDocJob.hasHardCopyDO} 
+                            onChange={(e) => handleUpdateDocJob(activeDocJob.id, { hasHardCopyDO: e.target.checked })}
+                            style={{ width: '18px', height: '18px' }}
+                         />
+                         Hard Copy DO Issued
+                      </label>
+                    </div>
+
                     <div className="doc-checklist">
                       {activeDocJob.docs.map((doc, idx) => (
                         <div key={idx} className="doc-item" style={{ opacity: doc.status === 'verified' ? 0.7 : 1 }}>
@@ -910,9 +956,26 @@ function App() {
                           )}
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                             <button className="btn-icon" title="Edit" onClick={() => setLicenceToEdit(lic)}><Edit size={16} /></button>
-                             <button className="btn-icon reject" title="Delete" onClick={() => handleDeleteLicence(lic.id)}><Trash2 size={16} /></button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                             <input 
+                                type="number" 
+                                placeholder="Amount" 
+                                value={licenceUtilAmounts[lic.id] || ''} 
+                                onChange={(e) => setLicenceUtilAmounts(prev => ({...prev, [lic.id]: e.target.value}))}
+                                style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontSize: '0.8rem' }}
+                             />
+                             <button 
+                                className="btn-primary" 
+                                style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                onClick={() => {
+                                   handleApplyLicence(lic.id, licenceUtilAmounts[lic.id]);
+                                   setLicenceUtilAmounts(prev => ({...prev, [lic.id]: ''}));
+                                }}
+                             >
+                                Apply
+                             </button>
+                             <button className="btn-icon" onClick={() => setLicenceToEdit(lic)}><Edit size={14}/></button>
+                             <button className="btn-icon reject" onClick={() => handleDeleteLicence(lic.id)}><Trash2 size={14}/></button>
                           </div>
                         </td>
                       </tr>
@@ -957,15 +1020,25 @@ function App() {
             {/* Kanban Board */}
             <div className="kanban-board">
               
-              {/* Column 1: Pending Dispatch */}
-              <div className="kanban-column">
+              <div 
+                className="kanban-column"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'dispatch')}
+              >
                 <div className="kanban-header">
                   <div className="kanban-title"><Archive size={16} /> Pending Dispatch</div>
                   <span className="kanban-count">{logisticsTrips.filter(t => t.status === 'dispatch').length}</span>
                 </div>
                 <div className="kanban-cards-container">
                   {logisticsTrips.filter(t => t.status === 'dispatch').map(trip => (
-                    <div key={trip.id} className="trip-card" onClick={() => setSelectedLogisticsTrip(trip)} style={{ cursor: 'pointer' }}>
+                    <div 
+                      key={trip.id} 
+                      className="trip-card" 
+                      draggable 
+                      onDragStart={(e) => handleDragStart(e, trip.id)}
+                      onClick={() => setSelectedLogisticsTrip(trip)} 
+                      style={{ cursor: 'move' }}
+                    >
                       <div className="trip-header">
                         <span className="trip-job-id">Job #{trip.job}</span>
                         <span className="trip-truck" style={{ backgroundColor: trip.truck === 'Pending Allocation' ? 'var(--warning-bg)' : 'var(--bg-color)' }}>
@@ -978,24 +1051,44 @@ function App() {
                         <span className="trip-separator">➔</span>
                         <span className="trip-location">{trip.to}</span>
                       </div>
-                      <div className="trip-meta">
+                      <div className="trip-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="trip-driver"><User size={12} /> {trip.driver}</span>
-                        <span className="trip-eta"><Clock size={12} /> {trip.eta}</span>
+                        <button 
+                          className="btn-primary" 
+                          style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTripToDispatch(trip);
+                            setIsDispatchModalOpen(true);
+                          }}
+                        >
+                          Dispatch
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Column 2: En Route */}
-              <div className="kanban-column">
+              <div 
+                className="kanban-column"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'enroute')}
+              >
                 <div className="kanban-header">
                   <div className="kanban-title"><Navigation size={16} color="var(--info-text)" /> En Route</div>
                   <span className="kanban-count">{logisticsTrips.filter(t => t.status === 'enroute').length}</span>
                 </div>
                 <div className="kanban-cards-container">
                   {logisticsTrips.filter(t => t.status === 'enroute').map(trip => (
-                    <div key={trip.id} className="trip-card" onClick={() => setSelectedLogisticsTrip(trip)} style={{ borderColor: trip.delayed ? 'var(--danger-text)' : 'var(--border-color)', cursor: 'pointer' }}>
+                    <div 
+                      key={trip.id} 
+                      className="trip-card" 
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, trip.id)}
+                      onClick={() => setSelectedLogisticsTrip(trip)} 
+                      style={{ borderColor: trip.delayed ? 'var(--danger-text)' : 'var(--border-color)', cursor: 'move' }}
+                    >
                       <div className="trip-header">
                         <span className="trip-job-id">Job #{trip.job}</span>
                         <span className="trip-truck"><Truck size={12} /> {trip.truck}</span>
@@ -1017,15 +1110,24 @@ function App() {
                 </div>
               </div>
 
-              {/* Column 3: Arrived / Completed */}
-              <div className="kanban-column">
+              <div 
+                className="kanban-column"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'arrived')}
+              >
                 <div className="kanban-header">
                   <div className="kanban-title"><CheckCircle2 size={16} color="var(--success-text)" /> Arrived</div>
                   <span className="kanban-count">{logisticsTrips.filter(t => t.status === 'arrived').length}</span>
                 </div>
                 <div className="kanban-cards-container">
                   {logisticsTrips.filter(t => t.status === 'arrived').map(trip => (
-                    <div key={trip.id} className="trip-card" style={{ opacity: 0.7 }}>
+                    <div 
+                      key={trip.id} 
+                      className="trip-card" 
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, trip.id)}
+                      style={{ opacity: 0.7, cursor: 'move' }}
+                    >
                       <div className="trip-header">
                         <span className="trip-job-id">Job #{trip.job}</span>
                         <span className="trip-truck"><Truck size={12} /> {trip.truck}</span>
@@ -1174,25 +1276,39 @@ function App() {
                       <div>
                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Document Vault</h4>
-                            <button 
-                              className="btn-primary" 
-                              style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--surface-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', boxShadow: 'none' }}
-                              onClick={() => alert(`Simulation: Document upload triggered for ${activeClient.name}. Select files to add to vault.`)}
-                            >
-                               <UploadCloud size={16} /> Upload Doc
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                               <input 
+                                  placeholder="Document Name" 
+                                  value={newDocName} 
+                                  onChange={(e) => setNewDocName(e.target.value)}
+                                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontSize: '0.8rem' }}
+                               />
+                               <button 
+                                 className="btn-primary" 
+                                 style={{ padding: '0.5rem 1rem' }}
+                                 onClick={() => {
+                                   handleUploadDoc(activeClient.id, newDocName);
+                                   setNewDocName('');
+                                 }}
+                               >
+                                  <UploadCloud size={16} /> Upload Doc
+                               </button>
+                            </div>
                          </div>
                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                            {activeClient.docs.map((doc, idx) => (
+                            {activeClient.documents?.map((doc, idx) => (
                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                      <FileText size={18} color="var(--primary-color)" />
-                                     <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc}.pdf</span>
+                                     <div>
+                                        <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc.name}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{doc.status.toUpperCase()}</div>
+                                     </div>
                                   </div>
                                   <button 
                                     className="btn-icon" 
                                     style={{ width: '28px', height: '28px' }}
-                                    onClick={() => alert(`Opening viewer for ${doc}.pdf...`)}
+                                    onClick={() => alert(`Simulation: Opening viewer for ${doc.name}...`)}
                                   >
                                     <Download size={14} />
                                   </button>
