@@ -46,14 +46,16 @@ import './modal.css';
 import ClientFormModal from './ClientFormModal';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('freight');
-  const [selectedClient, setSelectedClient] = useState('CLI-001');
-  const [selectedVendor, setSelectedVendor] = useState('VND-001');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedVendor, setSelectedVendor] = useState(null);
   const [jobFilter, setJobFilter] = useState('All');
   const [vendorFilter, setVendorFilter] = useState('All');
   const [freightFilter, setFreightFilter] = useState('All');
-  const [selectedDocJob, setSelectedDocJob] = useState('IMP-8802');
+  const [selectedDocJob, setSelectedDocJob] = useState(null);
   const [licenceFilter, setLicenceFilter] = useState('All');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const navigation = [
     { id: 'dashboard', label: 'Dashboard Overview', icon: LayoutDashboard },
@@ -80,34 +82,46 @@ function App() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const fetchAllData = () => {
-    fetch('http://localhost:3000/api/clients')
-      .then(res => res.json())
-      .then(data => setClientsData(data.map(d => ({ ...d, id: d.client_id }))));
-      
-    fetch('http://localhost:3000/api/vendors')
-      .then(res => res.json())
-      .then(data => setVendorsData(data.map(d => ({ ...d, id: d.vendor_id }))));
+  const fetchAllData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [clients, vendors, freight, docJobsRes, logistics, clearance, licences] = await Promise.all([
+        fetch('http://localhost:3000/api/clients').then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
+        fetch('http://localhost:3000/api/vendors').then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
+        fetch('http://localhost:3000/api/freight').then(r => { if (!r.ok) throw new Error('freight'); return r.json(); }),
+        fetch('http://localhost:3000/api/doc-jobs').then(r => { if (!r.ok) throw new Error('doc-jobs'); return r.json(); }),
+        fetch('http://localhost:3000/api/logistics').then(r => { if (!r.ok) throw new Error('logistics'); return r.json(); }),
+        fetch('http://localhost:3000/api/clearance-jobs').then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
+        fetch('http://localhost:3000/api/licences').then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
+      ]);
 
-    fetch('http://localhost:3000/api/freight')
-      .then(res => res.json())
-      .then(data => setFreightJobs(data.map(d => ({ ...d, id: d.job_id }))));
+      const mappedClients = clients.map(d => ({ ...d, id: d.client_id }));
+      const mappedVendors = vendors.map(d => ({ ...d, id: d.vendor_id }));
+      const mappedFreight = freight.map(d => ({ ...d, id: d.job_id }));
+      const mappedDocJobs = docJobsRes.map(d => ({ ...d, id: d.job_id }));
+      const mappedLogistics = logistics.map(d => ({ ...d, id: d.trip_id }));
+      const mappedClearance = clearance.map(d => ({ ...d, id: d.job_id }));
+      const mappedLicences = licences.map(d => ({ ...d, id: d.licence_id }));
 
-    fetch('http://localhost:3000/api/doc-jobs')
-      .then(res => res.json())
-      .then(data => setDocJobs(data.map(d => ({ ...d, id: d.job_id }))));
+      setClientsData(mappedClients);
+      setVendorsData(mappedVendors);
+      setFreightJobs(mappedFreight);
+      setDocJobs(mappedDocJobs);
+      setLogisticsTrips(mappedLogistics);
+      setClearanceJobs(mappedClearance);
+      setLicencesData(mappedLicences);
 
-    fetch('http://localhost:3000/api/logistics')
-      .then(res => res.json())
-      .then(data => setLogisticsTrips(data.map(d => ({ ...d, id: d.trip_id }))));
-
-    fetch('http://localhost:3000/api/clearance-jobs')
-      .then(res => res.json())
-      .then(data => setClearanceJobs(data.map(d => ({ ...d, id: d.job_id }))));
-
-    fetch('http://localhost:3000/api/licences')
-      .then(res => res.json())
-      .then(data => setLicencesData(data.map(d => ({ ...d, id: d.licence_id }))));
+      // Auto-select first items if nothing is selected
+      setSelectedClient(prev => prev || (mappedClients[0]?.id ?? null));
+      setSelectedVendor(prev => prev || (mappedVendors[0]?.id ?? null));
+      setSelectedDocJob(prev => prev || (mappedDocJobs[0]?.id ?? null));
+    } catch (err) {
+      console.error('API fetch failed:', err);
+      setError('Failed to load data from the server. Please ensure the backend is running on port 3000.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -126,6 +140,53 @@ function App() {
     }
   };
 
+  const advanceJobStage = async (jobId) => {
+    // 1. Find the job in current state
+    const job = clearanceJobs.find(j => j.id === jobId);
+    if (!job) return;
+    const currentIdx = stages.indexOf(job.stage);
+    if (currentIdx === -1) return;
+    const isLastStage = currentIdx === stages.length - 1;
+
+    // 2. Optimistic update — immediately reflect in UI
+    const optimisticNextStage = isLastStage ? job.stage : stages[currentIdx + 1];
+    const optimisticStatus = isLastStage ? 'completed' : 'pending';
+    setClearanceJobs(prev =>
+      prev.map(j =>
+        j.id === jobId
+          ? { ...j, stage: optimisticNextStage, status: optimisticStatus, alert: false }
+          : j
+      )
+    );
+
+    // 3. PATCH request to backend
+    try {
+      const res = await fetch(`http://localhost:3000/api/clearance-jobs/${jobId}/advance`, {
+        method: 'PATCH',
+      });
+      if (!res.ok) throw new Error('Server error');
+      const updated = await res.json();
+
+      // 4. Reconcile with server response (source of truth)
+      setClearanceJobs(prev =>
+        prev.map(j =>
+          j.id === jobId
+            ? { ...updated, id: updated.job_id }
+            : j
+        )
+      );
+    } catch (err) {
+      console.error('Failed to advance stage:', err);
+      // 5. Rollback optimistic update on failure
+      setClearanceJobs(prev =>
+        prev.map(j =>
+          j.id === jobId ? job : j // restore original
+        )
+      );
+      alert(`Could not advance job ${jobId}. Please try again.`);
+    }
+  };
+
   const activeClient = clientsData.find(c => c.id === selectedClient);
   const filteredVendors = vendorFilter === 'All' ? vendorsData : vendorsData.filter(v => v.type === vendorFilter);
   const activeVendor = vendorsData.find(v => v.id === selectedVendor);
@@ -139,6 +200,28 @@ function App() {
     if (licenceFilter === 'Processing') return l.status === 'Processing';
     return true;
   });
+
+  // Live derived metrics
+  const metrics = {
+    activeClearances: clearanceJobs.filter(j => j.status === 'pending').length,
+    enRouteLogistics: logisticsTrips.filter(t => t.status === 'enroute').length,
+    pendingDocs: docJobs.filter(j => j.status === 'review' || j.status === 'missing').length,
+    criticalDocs: docJobs.filter(j => j.status === 'missing').length,
+    upcomingFreight: freightJobs.filter(f => f.status !== 'Arrived').length,
+    assessmentPending: clearanceJobs.filter(j => j.stage === 'Assessment' && j.status === 'pending').length,
+    dutyUnpaid: clearanceJobs.filter(j => j.stage === 'Duty' && j.status === 'pending').length,
+    examScheduled: clearanceJobs.filter(j => j.stage === 'Exam').length,
+    clearedToday: clearanceJobs.filter(j => j.status === 'completed').length,
+    pendingDispatch: logisticsTrips.filter(t => t.status === 'dispatch').length,
+    delayedEnRoute: logisticsTrips.filter(t => t.delayed).length,
+    deliveriesCompleted: logisticsTrips.filter(t => t.status === 'arrived').length,
+    activeLicences: licencesData.filter(l => l.status === 'Active').length,
+    expiringLicences: licencesData.filter(l => l.status === 'Expiring' || l.status === 'Pending renewal').length,
+    processingLicences: licencesData.filter(l => l.status === 'Processing').length,
+    activeVoyages: freightJobs.filter(f => f.status === 'In Transit' || f.status === 'Origin' || f.status === 'Booked').length,
+    delayedTransits: freightJobs.filter(f => f.alert).length,
+    totalAlerts: clearanceJobs.filter(j => j.alert).length + freightJobs.filter(f => f.alert).length + licencesData.filter(l => l.alert).length,
+  };
 
   const renderStageProgress = (currentStage, status, hasAlert) => {
     const currentIndex = stages.indexOf(currentStage);
@@ -170,6 +253,22 @@ function App() {
       </div>
     );
   };
+
+  if (isLoading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: '1rem', background: 'var(--bg-color)' }}>
+      <div style={{ width: 40, height: 40, border: '3px solid var(--border-color)', borderTopColor: 'var(--primary-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Connecting to TradeFlow API...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: '1rem', background: 'var(--bg-color)', padding: '2rem', textAlign: 'center' }}>
+      <AlertTriangle size={48} color="var(--danger-text)" />
+      <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Connection Error</h2>
+      <p style={{ color: 'var(--text-muted)', maxWidth: '400px', lineHeight: 1.6 }}>{error}</p>
+      <button className="btn-primary" onClick={fetchAllData}>Retry Connection</button>
+    </div>
+  );
 
   return (
     <div className="app-container">
@@ -218,10 +317,12 @@ function App() {
             <div style={{ position: 'relative' }}>
               <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
                 <Bell size={18} />
-                <span style={{ 
-                  position: 'absolute', top: 0, right: 0, width: 8, height: 8, 
-                  backgroundColor: 'var(--danger-text)', borderRadius: '50%' 
-                }}></span>
+                {metrics.totalAlerts > 0 && (
+                  <span style={{ 
+                    position: 'absolute', top: 0, right: 0, width: 8, height: 8, 
+                    backgroundColor: 'var(--danger-text)', borderRadius: '50%' 
+                  }}></span>
+                )}
               </button>
               {showNotifications && (
                 <div className="notification-panel">
@@ -280,9 +381,9 @@ function App() {
                   <span className="metric-title">Active Clearances</span>
                   <div className="metric-icon"><PackageCheck size={20} /></div>
                 </div>
-                <div className="metric-value">142</div>
+                <div className="metric-value">{metrics.activeClearances}</div>
                 <div className="metric-trend trend-up">
-                  <TrendingUp size={14} /> +12% from last week
+                  <TrendingUp size={14} /> {metrics.activeClearances} pending jobs
                 </div>
               </div>
 
@@ -291,9 +392,9 @@ function App() {
                   <span className="metric-title">Logistics (En Route)</span>
                   <div className="metric-icon"><Truck size={20} /></div>
                 </div>
-                <div className="metric-value">38</div>
+                <div className="metric-value">{metrics.enRouteLogistics}</div>
                 <div className="metric-trend trend-up">
-                  <TrendingUp size={14} /> 4 arriving today
+                  <TrendingUp size={14} /> {metrics.deliveriesCompleted} arrived today
                 </div>
               </div>
 
@@ -302,27 +403,53 @@ function App() {
                   <span className="metric-title">Pending Documents</span>
                   <div className="metric-icon"><FolderOpenDot size={20} /></div>
                 </div>
-                <div className="metric-value" style={{ color: 'var(--warning-text)'}}>24</div>
+                <div className="metric-value" style={{ color: metrics.criticalDocs > 0 ? 'var(--warning-text)' : 'inherit'}}>{metrics.pendingDocs}</div>
                 <div className="metric-trend trend-down">
-                  <AlertTriangle size={14} /> 5 critical missing
+                  <AlertTriangle size={14} /> {metrics.criticalDocs} critical missing
                 </div>
               </div>
 
               <div className="metric-card glass-card">
                 <div className="metric-header">
-                  <span className="metric-title">Upcoming Freight</span>
+                  <span className="metric-title">Active Freight</span>
                   <div className="metric-icon"><Ship size={20} /></div>
                 </div>
-                <div className="metric-value">18</div>
+                <div className="metric-value">{metrics.upcomingFreight}</div>
                 <div className="metric-trend trend-up">
-                  <Clock size={14} /> Next ETA: 14:00 (Vessel A)
+                  <Clock size={14} /> {metrics.delayedTransits} with active alerts
                 </div>
               </div>
             </div>
             
             <div className="bento-grid">
                <div className="bento-item glass-card">
-                 <div className="section-title">Use the sidebar to navigate to Customs Clearance.</div>
+                 <div className="section-title" style={{ marginBottom: '1.5rem' }}>Operations at a Glance</div>
+                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Total Clients</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{clientsData.length}</div>
+                   </div>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Active Vendors</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{vendorsData.length}</div>
+                   </div>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--danger-text)', marginBottom: '0.25rem' }}>Total Alerts</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger-text)' }}>{metrics.totalAlerts}</div>
+                   </div>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Active Licences</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{metrics.activeLicences}</div>
+                   </div>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--warning-text)', marginBottom: '0.25rem' }}>Expiring Licences</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--warning-text)' }}>{metrics.expiringLicences}</div>
+                   </div>
+                   <div style={{ padding: '1rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Active Voyages</div>
+                     <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{metrics.activeVoyages}</div>
+                   </div>
+                 </div>
                </div>
             </div>
           </div>
@@ -350,23 +477,23 @@ function App() {
               </button>
             </div>
 
-            {/* Sub-Metrics */}
+            {/* Sub-Metrics: live from API */}
             <div className="metrics-grid">
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Assessment Pending</span><AlertTriangle size={16} color="var(--warning-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>12</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.assessmentPending}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Duty Unpaid</span><Clock size={16} color="var(--danger-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>8</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.dutyUnpaid}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Exam Scheduled</span><Search size={16} color="var(--info-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>5</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.examScheduled}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
-                <div className="metric-header"><span className="metric-title">Cleared Today (OOC)</span><CheckCircle2 size={16} color="var(--success-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>24</div>
+                <div className="metric-header"><span className="metric-title">Cleared (OOC)</span><CheckCircle2 size={16} color="var(--success-text)"/></div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.clearedToday}</div>
               </div>
             </div>
 
@@ -388,29 +515,59 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredJobs.map(job => (
-                      <tr key={job.id}>
-                        <td><strong>#{job.id}</strong></td>
-                        <td>{job.client}</td>
-                        <td>
-                          <div>{job.type}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{job.port}</div>
-                        </td>
-                        <td>
-                          {renderStageProgress(job.stage, job.status, job.alert)}
-                          {job.alert && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--danger-text)', marginTop: '4px' }}>
-                              {job.stage === 'Filing' ? 'Missing HBL Copy' : 'Duty Payment Overdue'}
+                    {filteredJobs.map(job => {
+                      const stageIdx = stages.indexOf(job.stage);
+                      const isCompleted = job.status === 'completed';
+                      const isLastStage = stageIdx === stages.length - 1;
+                      return (
+                        <tr key={job.id} style={{ opacity: isCompleted ? 0.65 : 1, transition: 'opacity 0.3s' }}>
+                          <td><strong>#{job.id}</strong></td>
+                          <td>{job.client}</td>
+                          <td>
+                            <div>{job.type}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{job.port}</div>
+                          </td>
+                          <td>
+                            {renderStageProgress(job.stage, job.status, job.alert)}
+                            {job.alert && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--danger-text)', marginTop: '4px' }}>
+                                {job.stage === 'Filing' ? 'Missing HBL Copy' : 'Duty Payment Overdue'}
+                              </div>
+                            )}
+                          </td>
+                          <td>{job.assigned}</td>
+                          <td style={{ color: 'var(--text-muted)' }}>{job.date}</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              {isCompleted ? (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--success-text)', padding: '4px 8px', background: 'rgba(34,197,94,0.08)', borderRadius: '4px' }}>
+                                  <CheckCircle2 size={13} /> OOC
+                                </span>
+                              ) : (
+                                <button
+                                  title={isLastStage ? 'Mark as OOC (Cleared)' : `Advance to ${stages[stageIdx + 1] ?? 'OOC'}`}
+                                  onClick={() => advanceJobStage(job.id)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                    padding: '4px 10px', fontSize: '0.72rem', fontWeight: 600,
+                                    borderRadius: '4px', cursor: 'pointer', border: '1px solid',
+                                    whiteSpace: 'nowrap',
+                                    backgroundColor: job.alert ? 'rgba(239,68,68,0.08)' : 'rgba(56,189,248,0.08)',
+                                    color: job.alert ? 'var(--danger-text)' : 'var(--info-text)',
+                                    borderColor: job.alert ? 'rgba(239,68,68,0.25)' : 'rgba(56,189,248,0.25)',
+                                    transition: 'all 0.15s'
+                                  }}
+                                >
+                                  <ArrowRightCircle size={13} />
+                                  {isLastStage ? 'Mark OOC' : `→ ${stages[stageIdx + 1]}`}
+                                </button>
+                              )}
+                              <div className="table-action-menu"><MoreVertical size={18} /></div>
                             </div>
-                          )}
-                        </td>
-                        <td>{job.assigned}</td>
-                        <td style={{ color: 'var(--text-muted)' }}>{job.date}</td>
-                        <td>
-                          <div className="table-action-menu"><MoreVertical size={18} /></div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -427,15 +584,15 @@ function App() {
             <div className="metrics-grid">
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Pending Verification</span><Eye size={16} color="var(--warning-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>14</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{docJobs.filter(j => j.status === 'review').length}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Missing Documents</span><AlertCircle size={16} color="var(--danger-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>7</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{docJobs.filter(j => j.status === 'missing').length}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
-                <div className="metric-header"><span className="metric-title">Verified Today</span><CheckCircle2 size={16} color="var(--success-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>42</div>
+                <div className="metric-header"><span className="metric-title">Verified / Complete</span><CheckCircle2 size={16} color="var(--success-text)"/></div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{docJobs.filter(j => j.status === 'complete').length}</div>
               </div>
             </div>
 
@@ -532,19 +689,19 @@ function App() {
             <div className="metrics-grid">
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Active Licences</span><FileCheck2 size={16} color="var(--success-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>84</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.activeLicences}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
-                <div className="metric-header"><span className="metric-title">Expiring in 30 Days</span><AlertTriangle size={16} color="var(--danger-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>12</div>
+                <div className="metric-header"><span className="metric-title">Expiring / Renewing</span><AlertTriangle size={16} color="var(--danger-text)"/></div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.expiringLicences}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Pending Renewal</span><Clock size={16} color="var(--warning-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>5</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{licencesData.filter(l => l.status === 'Pending renewal').length}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Applications Processing</span><FileText size={16} color="var(--info-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>9</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.processingLicences}</div>
               </div>
             </div>
 
@@ -620,23 +777,23 @@ function App() {
         {activeTab === 'logistics' && (
           <div className="dashboard-content">
             
-            {/* Sub-Metrics */}
+            {/* Sub-Metrics: live from logistics state */}
             <div className="metrics-grid" style={{ marginBottom: '0.5rem' }}>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Active Fleet</span><Truck size={16} color="var(--primary-color)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>45/60</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{logisticsTrips.length}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Pending Dispatch</span><Clock size={16} color="var(--warning-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>2</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.pendingDispatch}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Delayed En Route</span><AlertTriangle size={16} color="var(--danger-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem', color: 'var(--danger-text)' }}>1</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem', color: 'var(--danger-text)' }}>{metrics.delayedEnRoute}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Deliveries Completed</span><CheckCircle2 size={16} color="var(--success-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>18</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.deliveriesCompleted}</div>
               </div>
             </div>
 
@@ -1024,23 +1181,23 @@ function App() {
               </button>
             </div>
 
-            {/* Sub-Metrics */}
+            {/* Sub-Metrics: live from freight state */}
             <div className="metrics-grid">
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Active Voyages</span><Waves size={16} color="var(--primary-color)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>18</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{metrics.activeVoyages}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">ETA This Week</span><Compass size={16} color="var(--info-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>6</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{freightJobs.filter(f => f.status === 'In Transit' || f.status === 'Arrived').length}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Delayed Transits</span><AlertTriangle size={16} color="var(--warning-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem', color: "var(--danger-text)" }}>2</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem', color: "var(--danger-text)" }}>{metrics.delayedTransits}</div>
               </div>
               <div className="metric-card glass-card" style={{ padding: '1rem', gap: '0.5rem' }}>
                 <div className="metric-header"><span className="metric-title">Pre-Alerts Missing</span><AlertCircle size={16} color="var(--danger-text)"/></div>
-                <div className="metric-value" style={{ fontSize: '1.5rem' }}>3</div>
+                <div className="metric-value" style={{ fontSize: '1.5rem' }}>{freightJobs.filter(f => f.status === 'Booked').length}</div>
               </div>
             </div>
 
