@@ -44,6 +44,16 @@ import './docs.css';
 import './logistics.css';
 import './modal.css';
 import ClientFormModal from './ClientFormModal';
+import VendorFormModal from './VendorFormModal';
+import ClearanceJobFormModal from './ClearanceJobFormModal';
+import LicenceFormModal from './LicenceFormModal';
+import FreightFormModal from './FreightFormModal';
+import LogisticsFormModal from './LogisticsFormModal';
+import SearchModal from './SearchModal';
+import SettingsModal from './SettingsModal';
+import ClearanceDetailModal from './ClearanceDetailModal';
+import FreightDetailModal from './FreightDetailModal';
+import LogisticsDetailModal from './LogisticsDetailModal';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -80,6 +90,22 @@ function App() {
   const [licencesData, setLicencesData] = useState([]);
 
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [isClearanceJobModalOpen, setIsClearanceJobModalOpen] = useState(false);
+  const [isLicenceModalOpen, setIsLicenceModalOpen] = useState(false);
+  const [isFreightModalOpen, setIsFreightModalOpen] = useState(false);
+  const [isLogisticsModalOpen, setIsLogisticsModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [selectedDetailJob, setSelectedDetailJob] = useState(null);
+  const [selectedFreightJob, setSelectedFreightJob] = useState(null);
+  const [selectedLogisticsTrip, setSelectedLogisticsTrip] = useState(null);
+  const [clientToEdit, setClientToEdit] = useState(null);
+  const [vendorToEdit, setVendorToEdit] = useState(null);
+  const [licenceToEdit, setLicenceToEdit] = useState(null);
+  const [clearanceToEdit, setClearanceToEdit] = useState(null);
+  const [freightToEdit, setFreightToEdit] = useState(null);
+  const [logisticsToEdit, setLogisticsToEdit] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const fetchAllData = async () => {
@@ -132,11 +158,58 @@ function App() {
     if(window.confirm('Are you sure you want to delete this client?')) {
       try {
         await fetch(`http://localhost:3000/api/clients/${id}`, { method: 'DELETE' });
-        setSelectedClient(null);
+        if (selectedClient === id) setSelectedClient(null);
         fetchAllData();
-      } catch (e) {
-        alert('Failed to delete client');
-      }
+      } catch (e) { alert('Failed to delete client'); }
+    }
+  };
+
+  const handleDeleteVendor = async (id) => {
+    if(window.confirm('Are you sure you want to delete this vendor?')) {
+      try {
+        await fetch(`http://localhost:3000/api/vendors/${id}`, { method: 'DELETE' });
+        if (selectedVendor === id) setSelectedVendor(null);
+        fetchAllData();
+      } catch (e) { alert('Failed to delete vendor'); }
+    }
+  };
+
+  const handleDeleteLicence = async (id) => {
+    if(window.confirm('Are you sure you want to delete this licence?')) {
+      try {
+        await fetch(`http://localhost:3000/api/licences/${id}`, { method: 'DELETE' });
+        fetchAllData();
+      } catch (e) { alert('Failed to delete licence'); }
+    }
+  };
+
+  const handleDeleteClearance = async (id) => {
+    if(window.confirm('Are you sure you want to delete this clearance job?')) {
+      try {
+        await fetch(`http://localhost:3000/api/clearance-jobs/${id}`, { method: 'DELETE' });
+        if(selectedDetailJob?.id === id) setSelectedDetailJob(null);
+        fetchAllData();
+      } catch (e) { alert('Failed to delete job'); }
+    }
+  };
+
+  const handleDeleteFreight = async (id) => {
+    if(window.confirm('Are you sure you want to delete this shipment?')) {
+      try {
+        await fetch(`http://localhost:3000/api/freight/${id}`, { method: 'DELETE' });
+        if(selectedFreightJob?.id === id) setSelectedFreightJob(null);
+        fetchAllData();
+      } catch (e) { alert('Failed to delete shipment'); }
+    }
+  };
+
+  const handleDeleteLogistics = async (id) => {
+    if(window.confirm('Are you sure you want to delete this trip?')) {
+      try {
+        await fetch(`http://localhost:3000/api/logistics/${id}`, { method: 'DELETE' });
+        if(selectedLogisticsTrip?.id === id) setSelectedLogisticsTrip(null);
+        fetchAllData();
+      } catch (e) { alert('Failed to delete trip'); }
     }
   };
 
@@ -313,7 +386,7 @@ function App() {
             {navigation.find(n => n.id === activeTab)?.label}
           </div>
           <div className="header-actions">
-            <button className="icon-btn"><Search size={18} /></button>
+            <button className="icon-btn" onClick={() => setIsSearchModalOpen(true)}><Search size={18} /></button>
             <div style={{ position: 'relative' }}>
               <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
                 <Bell size={18} />
@@ -362,16 +435,71 @@ function App() {
                 </div>
               )}
             </div>
-            <button className="icon-btn"><Settings size={18} /></button>
+            <button className="icon-btn" onClick={() => setIsSettingsModalOpen(true)}><Settings size={18} /></button>
           </div>
         </header>
 
-        {/* Global Client Form Modal */}
+        {/* Global Modals */}
         <ClientFormModal 
-          isOpen={isClientModalOpen} 
-          onClose={() => setIsClientModalOpen(false)} 
+          isOpen={isClientModalOpen || !!clientToEdit} 
+          onClose={() => { setIsClientModalOpen(false); setClientToEdit(null); }} 
+          initialData={clientToEdit}
           onSuccess={fetchAllData} 
         />
+        <VendorFormModal 
+          isOpen={isVendorModalOpen || !!vendorToEdit} 
+          onClose={() => { setIsVendorModalOpen(false); setVendorToEdit(null); }} 
+          initialData={vendorToEdit}
+          onSuccess={fetchAllData} 
+        />
+        <ClearanceJobFormModal 
+          isOpen={isClearanceJobModalOpen || !!clearanceToEdit} 
+          onClose={() => { setIsClearanceJobModalOpen(false); setClearanceToEdit(null); }} 
+          initialData={clearanceToEdit}
+          onSuccess={fetchAllData} 
+        />
+        <LicenceFormModal 
+          isOpen={isLicenceModalOpen || !!licenceToEdit} 
+          onClose={() => { setIsLicenceModalOpen(false); setLicenceToEdit(null); }} 
+          initialData={licenceToEdit}
+          onSuccess={fetchAllData} 
+        />
+        <FreightFormModal 
+          isOpen={isFreightModalOpen || !!freightToEdit} 
+          onClose={() => { setIsFreightModalOpen(false); setFreightToEdit(null); }} 
+          initialData={freightToEdit}
+          onSuccess={fetchAllData} 
+        />
+        <LogisticsFormModal 
+          isOpen={isLogisticsModalOpen || !!logisticsToEdit} 
+          onClose={() => { setIsLogisticsModalOpen(false); setLogisticsToEdit(null); }} 
+          initialData={logisticsToEdit}
+          onSuccess={fetchAllData} 
+        />
+        <SearchModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} />
+        <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />
+
+        <ClearanceDetailModal 
+          isOpen={!!selectedDetailJob} 
+          onClose={() => setSelectedDetailJob(null)} 
+          job={selectedDetailJob} 
+          onEdit={() => setClearanceToEdit(selectedDetailJob)}
+          onDelete={() => handleDeleteClearance(selectedDetailJob.id)}
+        />
+        <FreightDetailModal 
+          isOpen={!!selectedFreightJob} 
+          onClose={() => setSelectedFreightJob(null)} 
+          shipment={selectedFreightJob} 
+          onEdit={() => setFreightToEdit(selectedFreightJob)}
+          onDelete={() => handleDeleteFreight(selectedFreightJob.id)}
+        />
+        <LogisticsDetailModal 
+          isOpen={!!selectedLogisticsTrip} 
+          onClose={() => setSelectedLogisticsTrip(null)} 
+          trip={selectedLogisticsTrip} 
+          onEdit={() => setLogisticsToEdit(selectedLogisticsTrip)}
+          onDelete={() => handleDeleteLogistics(selectedLogisticsTrip.id)}
+        />      />
 
         {activeTab === 'dashboard' && (
           <div className="dashboard-content">
@@ -472,7 +600,7 @@ function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn-primary">
+              <button className="btn-primary" onClick={() => setIsClearanceJobModalOpen(true)}>
                 <Plus size={18} /> New Job
               </button>
             </div>
@@ -520,7 +648,11 @@ function App() {
                       const isCompleted = job.status === 'completed';
                       const isLastStage = stageIdx === stages.length - 1;
                       return (
-                        <tr key={job.id} style={{ opacity: isCompleted ? 0.65 : 1, transition: 'opacity 0.3s' }}>
+                        <tr 
+                          key={job.id} 
+                          style={{ opacity: isCompleted ? 0.65 : 1, transition: 'opacity 0.3s', cursor: 'pointer' }}
+                          onClick={() => setSelectedDetailJob(job)}
+                        >
                           <td><strong>#{job.id}</strong></td>
                           <td>{job.client}</td>
                           <td>
@@ -538,32 +670,40 @@ function App() {
                           <td>{job.assigned}</td>
                           <td style={{ color: 'var(--text-muted)' }}>{job.date}</td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              {isCompleted ? (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--success-text)', padding: '4px 8px', background: 'rgba(34,197,94,0.08)', borderRadius: '4px' }}>
-                                  <CheckCircle2 size={13} /> OOC
-                                </span>
-                              ) : (
-                                <button
-                                  title={isLastStage ? 'Mark as OOC (Cleared)' : `Advance to ${stages[stageIdx + 1] ?? 'OOC'}`}
-                                  onClick={() => advanceJobStage(job.id)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                    padding: '4px 10px', fontSize: '0.72rem', fontWeight: 600,
-                                    borderRadius: '4px', cursor: 'pointer', border: '1px solid',
-                                    whiteSpace: 'nowrap',
-                                    backgroundColor: job.alert ? 'rgba(239,68,68,0.08)' : 'rgba(56,189,248,0.08)',
-                                    color: job.alert ? 'var(--danger-text)' : 'var(--info-text)',
-                                    borderColor: job.alert ? 'rgba(239,68,68,0.25)' : 'rgba(56,189,248,0.25)',
-                                    transition: 'all 0.15s'
-                                  }}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <button 
+                                  className="btn-icon" 
+                                  title="View Details" 
+                                  onClick={(e) => { e.stopPropagation(); setSelectedDetailJob(job); }}
+                                  style={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--border-color)' }}
                                 >
-                                  <ArrowRightCircle size={13} />
-                                  {isLastStage ? 'Mark OOC' : `→ ${stages[stageIdx + 1]}`}
+                                  <FileText size={16} />
                                 </button>
-                              )}
-                              <div className="table-action-menu"><MoreVertical size={18} /></div>
-                            </div>
+                                {isCompleted ? (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--success-text)', padding: '4px 8px', background: 'rgba(34,197,94,0.08)', borderRadius: '4px' }}>
+                                    <CheckCircle2 size={13} /> OOC
+                                  </span>
+                                ) : (
+                                  <button
+                                    title={isLastStage ? 'Mark as OOC (Cleared)' : `Advance to ${stages[stageIdx + 1] ?? 'OOC'}`}
+                                    onClick={(e) => { e.stopPropagation(); advanceJobStage(job.id); }}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '4px',
+                                      padding: '4px 10px', fontSize: '0.72rem', fontWeight: 600,
+                                      borderRadius: '4px', cursor: 'pointer', border: '1px solid',
+                                      whiteSpace: 'nowrap',
+                                      backgroundColor: job.alert ? 'rgba(239,68,68,0.08)' : 'rgba(56,189,248,0.08)',
+                                      color: job.alert ? 'var(--danger-text)' : 'var(--info-text)',
+                                      borderColor: job.alert ? 'rgba(239,68,68,0.25)' : 'rgba(56,189,248,0.25)',
+                                      transition: 'all 0.15s'
+                                    }}
+                                  >
+                                    <ArrowRightCircle size={13} />
+                                    {isLastStage ? 'Mark OOC' : `→ ${stages[stageIdx + 1]}`}
+                                  </button>
+                                )}
+                                <div className="table-action-menu" onClick={(e) => { e.stopPropagation(); }}><MoreVertical size={18} /></div>
+                              </div>
                           </td>
                         </tr>
                       );
@@ -622,15 +762,15 @@ function App() {
                 {activeDocJob ? (
                   <>
                     <div className="doc-viewer-header">
-                      <div className="doc-viewer-title">
+                       <div className="doc-viewer-title">
                         <h3>Job #{activeDocJob.id} Details</h3>
                         <p>{activeDocJob.client} - {activeDocJob.type}</p>
                       </div>
-                      <button className="btn-primary" style={{ padding: '0.5rem 1rem' }}>Request Missing</button>
+                      <button className="btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={() => alert(`System Request: Missing documents requested from ${activeDocJob.client}`)}>Request Missing</button>
                     </div>
                     <div className="doc-checklist">
                       {activeDocJob.docs.map((doc, idx) => (
-                        <div key={idx} className="doc-item">
+                        <div key={idx} className="doc-item" style={{ opacity: doc.status === 'verified' ? 0.7 : 1 }}>
                           <div className="doc-item-info">
                             <div className="doc-icon"><FileText size={20} /></div>
                             <div>
@@ -638,7 +778,8 @@ function App() {
                               <div className="doc-meta">
                                 <span style={{ 
                                   color: doc.status === 'verified' ? 'var(--success-text)' : 
-                                         doc.status === 'missing' ? 'var(--danger-text)' : 'var(--warning-text)'
+                                         doc.status === 'missing' ? 'var(--danger-text)' : 'var(--warning-text)',
+                                  fontWeight: 600
                                 }}>
                                   ● {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
                                 </span>
@@ -648,8 +789,15 @@ function App() {
                           </div>
                           <div className="doc-actions">
                             <button className="btn-icon" title="View"><Eye size={16} /></button>
-                            <button className="btn-icon verify" title="Verify"><Check size={16} /></button>
-                            <button className="btn-icon reject" title="Reject"><X size={16} /></button>
+                            {doc.status !== 'verified' && (
+                              <>
+                                <button className="btn-icon verify" title="Verify" onClick={() => alert(`Simulated: ${doc.name} Verified for Job #${activeDocJob.id}`)}><Check size={16} /></button>
+                                <button className="btn-icon reject" title="Reject" onClick={() => {
+                                  const reason = prompt("Enter rejection reason:");
+                                  if(reason) alert(`Simulated: ${doc.name} Rejected. Reason: ${reason}`);
+                                }}><X size={16} /></button>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -681,7 +829,7 @@ function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn-primary">
+              <button className="btn-primary" onClick={() => setIsLicenceModalOpen(true)}>
                 <Plus size={18} /> New Licence
               </button>
             </div>
@@ -762,7 +910,10 @@ function App() {
                           )}
                         </td>
                         <td>
-                          <div className="table-action-menu"><MoreVertical size={18} /></div>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                             <button className="btn-icon" title="Edit" onClick={() => setLicenceToEdit(lic)}><Edit size={16} /></button>
+                             <button className="btn-icon reject" title="Delete" onClick={() => handleDeleteLicence(lic.id)}><Trash2 size={16} /></button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -776,6 +927,12 @@ function App() {
         {/* DOMESTIC LOGISTICS MODULE */}
         {activeTab === 'logistics' && (
           <div className="dashboard-content">
+            <div className="sub-header" style={{ marginBottom: 0 }}>
+              <div className="page-title" style={{ fontSize: '1.25rem' }}>Domestic Fleets</div>
+              <button className="btn-primary" onClick={() => setIsLogisticsModalOpen(true)}>
+                <Plus size={18} /> New Trip
+              </button>
+            </div>
             
             {/* Sub-Metrics: live from logistics state */}
             <div className="metrics-grid" style={{ marginBottom: '0.5rem' }}>
@@ -808,7 +965,7 @@ function App() {
                 </div>
                 <div className="kanban-cards-container">
                   {logisticsTrips.filter(t => t.status === 'dispatch').map(trip => (
-                    <div key={trip.id} className="trip-card">
+                    <div key={trip.id} className="trip-card" onClick={() => setSelectedLogisticsTrip(trip)} style={{ cursor: 'pointer' }}>
                       <div className="trip-header">
                         <span className="trip-job-id">Job #{trip.job}</span>
                         <span className="trip-truck" style={{ backgroundColor: trip.truck === 'Pending Allocation' ? 'var(--warning-bg)' : 'var(--bg-color)' }}>
@@ -838,7 +995,7 @@ function App() {
                 </div>
                 <div className="kanban-cards-container">
                   {logisticsTrips.filter(t => t.status === 'enroute').map(trip => (
-                    <div key={trip.id} className="trip-card" style={{ borderColor: trip.delayed ? 'var(--danger-text)' : 'var(--border-color)' }}>
+                    <div key={trip.id} className="trip-card" onClick={() => setSelectedLogisticsTrip(trip)} style={{ borderColor: trip.delayed ? 'var(--danger-text)' : 'var(--border-color)', cursor: 'pointer' }}>
                       <div className="trip-header">
                         <span className="trip-job-id">Job #{trip.job}</span>
                         <span className="trip-truck"><Truck size={12} /> {trip.truck}</span>
@@ -936,7 +1093,7 @@ function App() {
                         <p><MapPin size={14} style={{ display:'inline', marginRight: 4 }}/>{activeClient.address}</p>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn-icon" title="Edit"><Edit size={16} /></button>
+                        <button className="btn-icon" title="Edit" onClick={() => setClientToEdit(activeClient)}><Edit size={16} /></button>
                         <button className="btn-icon reject" title="Delete" onClick={() => handleDeleteClient(activeClient.id)}><Trash2 size={16} /></button>
                       </div>
                     </div>
@@ -1017,7 +1174,11 @@ function App() {
                       <div>
                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Document Vault</h4>
-                            <button className="btn-primary" style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--surface-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', boxShadow: 'none' }}>
+                            <button 
+                              className="btn-primary" 
+                              style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--surface-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', boxShadow: 'none' }}
+                              onClick={() => alert(`Simulation: Document upload triggered for ${activeClient.name}. Select files to add to vault.`)}
+                            >
                                <UploadCloud size={16} /> Upload Doc
                             </button>
                          </div>
@@ -1028,7 +1189,13 @@ function App() {
                                      <FileText size={18} color="var(--primary-color)" />
                                      <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc}.pdf</span>
                                   </div>
-                                  <button className="btn-icon" style={{ width: '28px', height: '28px' }}><Download size={14} /></button>
+                                  <button 
+                                    className="btn-icon" 
+                                    style={{ width: '28px', height: '28px' }}
+                                    onClick={() => alert(`Opening viewer for ${doc}.pdf...`)}
+                                  >
+                                    <Download size={14} />
+                                  </button>
                                </div>
                             ))}
                          </div>
@@ -1061,7 +1228,7 @@ function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn-primary">
+              <button className="btn-primary" onClick={() => setIsVendorModalOpen(true)}>
                 <Plus size={18} /> Add Vendor
               </button>
             </div>
@@ -1098,7 +1265,8 @@ function App() {
                         <p>{activeVendor.type} Partner</p>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn-icon" title="Edit"><Edit size={16} /></button>
+                        <button className="btn-icon" title="Edit" onClick={() => setVendorToEdit(activeVendor)}><Edit size={16} /></button>
+                        <button className="btn-icon reject" title="Delete" onClick={() => handleDeleteVendor(activeVendor.id)}><Trash2 size={16} /></button>
                       </div>
                     </div>
                     
@@ -1176,7 +1344,7 @@ function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn-primary">
+              <button className="btn-primary" onClick={() => setIsFreightModalOpen(true)}>
                 <Plus size={18} /> New Shipment
               </button>
             </div>
@@ -1220,7 +1388,7 @@ function App() {
                   </thead>
                   <tbody>
                     {filteredFreight.map(job => (
-                      <tr key={job.id}>
+                      <tr key={job.id} onClick={() => setSelectedFreightJob(job)} style={{ cursor: 'pointer' }}>
                         <td>
                           <strong>#{job.id}</strong>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{job.mbl || job.awb}</div>

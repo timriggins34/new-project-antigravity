@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import './modal.css';
 
-export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
+export default function ClientFormModal({ isOpen, onClose, onSuccess, initialData }) {
   const [formData, setFormData] = useState({
     name: '', nickname: '', clientType: 'Importer', constitution: 'Pvt Ltd', status: 'Active', clientSinceYear: '',
     pan: '', gstin: '', iec: '', cin_llpin: '', tan: '',
@@ -12,6 +12,20 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({ ...initialData });
+    } else {
+      setFormData({
+        name: '', nickname: '', clientType: 'Importer', constitution: 'Pvt Ltd', status: 'Active', clientSinceYear: '',
+        pan: '', gstin: '', iec: '', cin_llpin: '', tan: '',
+        address: '', contactPerson: '', contactNickname: '', mobile: '', email: '', contact1: '', contact2: '',
+        bankName: '', branchName: '', accountNumber: '', accountType: 'Current', ifsc: '', swift: '', bankAddress: '', adCode: '',
+        details: ''
+      });
+    }
+  }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
@@ -23,17 +37,21 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    const isEdit = !!initialData?.id;
+    const url = isEdit ? `http://localhost:3000/api/clients/${initialData.id}` : 'http://localhost:3000/api/clients';
+    const method = isEdit ? 'PUT' : 'POST';
+
     try {
-      const resp = await fetch('http://localhost:3000/api/clients', {
-        method: 'POST',
+      const resp = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({...formData, docs: []})
+        body: JSON.stringify({...formData, docs: formData.docs || []})
       });
       if (resp.ok) {
         onSuccess();
         onClose();
       } else {
-        alert("Failed to save client.");
+        alert(`Failed to ${isEdit ? 'update' : 'save'} client.`);
       }
     } catch (err) {
       console.error(err);
@@ -46,7 +64,7 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
     <div className="modal-overlay">
       <div className="modal-content glass-card large-modal">
         <div className="modal-header">
-          <h2>Add New Client</h2>
+          <h2>{initialData ? 'Edit Client' : 'Add New Client'}</h2>
           <button className="btn-icon" onClick={onClose}><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit} className="modal-body">
@@ -131,7 +149,7 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : <><Save size={16}/> Save Client</>}
+              {isSubmitting ? 'Saving...' : <><Save size={16}/> {initialData ? 'Update Client' : 'Save Client'}</>}
             </button>
           </div>
         </form>
@@ -139,3 +157,4 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess }) {
     </div>
   );
 }
+
