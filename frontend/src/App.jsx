@@ -856,7 +856,7 @@ function App() {
                     </div>
 
                     <div className="doc-checklist">
-                      {activeDocJob.docs.map((doc, idx) => (
+                      {(activeDocJob.documents || []).map((doc, idx) => (
                         <div key={idx} className="doc-item" style={{ opacity: doc.status === 'verified' ? 0.7 : 1 }}>
                           <div className="doc-item-info">
                             <div className="doc-icon"><FileText size={20} /></div>
@@ -864,11 +864,11 @@ function App() {
                               <div className="doc-name">{doc.name}</div>
                               <div className="doc-meta">
                                 <span style={{ 
-                                  color: doc.status === 'verified' ? 'var(--success-text)' : 
-                                         doc.status === 'missing' ? 'var(--danger-text)' : 'var(--warning-text)',
+                                  color: (doc.status || 'verified') === 'verified' ? 'var(--success-text)' : 
+                                         (doc.status || 'verified') === 'missing' ? 'var(--danger-text)' : 'var(--warning-text)',
                                   fontWeight: 600
                                 }}>
-                                  ● {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                                  ● {(doc.status || 'Verified').charAt(0).toUpperCase() + (doc.status || 'Verified').slice(1)}
                                 </span>
                                 {' '}• PDF Document
                               </div>
@@ -1343,7 +1343,7 @@ function App() {
                                      <FileText size={18} color="var(--primary-color)" />
                                      <div>
                                         <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc.name}</div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{doc.status.toUpperCase()}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{(doc.status || 'Verified').toUpperCase()}</div>
                                      </div>
                                   </div>
                                   <button 
@@ -1440,38 +1440,38 @@ function App() {
                          </div>
                       </div>
 
-                      {/* Active Jobs Section */}
-                      <div>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                               <CheckCircle2 size={16} color="var(--success-text)"/> Connected Active Jobs
-                            </h4>
-                         </div>
-                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {activeVendor.activeJobs.length > 0 ? activeVendor.activeJobs.map(jobId => (
-                               <div key={jobId} style={{ padding: '0.5rem 1rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-text)', borderRadius: 'var(--radius-pill)', fontWeight: 600, fontSize: '0.875rem', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-                                  #{jobId}
-                               </div>
-                            )) : <span style={{ color: 'var(--text-muted)' }}>No active assignments.</span>}
-                         </div>
-                      </div>
+                       {/* Connected Active Jobs Section */}
+                       <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <CheckCircle2 size={16} color="var(--success-text)"/> Clearance Assignments
+                             </h4>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                             {(activeVendor.clearanceJobs || []).length > 0 ? activeVendor.clearanceJobs.map(job => (
+                                <div key={job.job_id} style={{ padding: '0.5rem 1rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-text)', borderRadius: 'var(--radius-pill)', fontWeight: 600, fontSize: '0.875rem', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                                   #{job.job_id}
+                                </div>
+                             )) : <span style={{ color: 'var(--text-muted)' }}>No active clearance assignments.</span>}
+                          </div>
+                       </div>
 
-                      {/* Past Jobs Section */}
-                      <div>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
-                            <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                               <History size={16} color="var(--text-muted)"/> Past Employed Jobs
-                            </h4>
-                         </div>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {activeVendor.pastJobs.length > 0 ? activeVendor.pastJobs.map(jobId => (
-                               <div key={jobId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
-                                  <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>Job #{jobId}</span>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Completed</span>
-                               </div>
-                            )) : <span style={{ color: 'var(--text-muted)' }}>No past history.</span>}
-                         </div>
-                      </div>
+                       {/* Freight Assignments Section */}
+                       <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
+                             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <History size={16} color="var(--text-muted)"/> Freight Forwarding History/Active
+                             </h4>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                             {(activeVendor.freightJobs || []).length > 0 ? activeVendor.freightJobs.map(job => (
+                                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
+                                   <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>Job #{job.job_id}</span>
+                                   <span className="doc-status-badge doc-status-pending" style={{ fontSize: '0.65rem' }}>{job.status}</span>
+                                </div>
+                             )) : <span style={{ color: 'var(--text-muted)' }}>No freight history found.</span>}
+                          </div>
+                       </div>
 
                     </div>
                   </>

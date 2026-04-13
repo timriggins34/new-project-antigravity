@@ -33,11 +33,20 @@ export default function VendorFormModal({ isOpen, onClose, onSuccess, initialDat
     const url = isEdit ? `http://localhost:3000/api/vendors/${initialData.vendor_id}` : 'http://localhost:3000/api/vendors';
     const method = isEdit ? 'PUT' : 'POST';
 
+    // Sanitize data — only send core fields to avoid DB errors with relations
+    const submissionData = {
+      name: formData.name,
+      type: formData.type,
+      contact: formData.contact,
+      phone: formData.phone,
+      email: formData.email
+    };
+
     try {
       const resp = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submissionData)
       });
       if (resp.ok) {
         onSuccess();
