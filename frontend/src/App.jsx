@@ -499,7 +499,7 @@ function App() {
           trip={selectedLogisticsTrip} 
           onEdit={() => setLogisticsToEdit(selectedLogisticsTrip)}
           onDelete={() => handleDeleteLogistics(selectedLogisticsTrip.id)}
-        />      />
+        />
 
         {activeTab === 'dashboard' && (
           <div className="dashboard-content">
