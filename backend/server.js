@@ -209,12 +209,12 @@ app.delete('/api/doc-jobs/:id', async (req, res) => {
 });
 
 // --- LOGISTICS TRIPS ---
-app.get('/api/logistics', async (req, res) => {
+app.get('/api/logistics-trips', async (req, res) => {
   try { const trips = await prisma.logisticsTrip.findMany(); res.json(trips); } 
   catch (error) { res.status(500).json({ error: 'Failed to fetch trips' }); }
 });
 
-app.post('/api/logistics', async (req, res) => {
+app.post('/api/logistics-trips', async (req, res) => {
   try {
     const data = req.body;
     const trip = await prisma.logisticsTrip.create({
@@ -224,14 +224,14 @@ app.post('/api/logistics', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to create trip' }); }
 });
 
-app.put('/api/logistics/:id', async (req, res) => {
+app.put('/api/logistics-trips/:id', async (req, res) => {
   try {
     const updated = await prisma.logisticsTrip.update({ where: { trip_id: req.params.id }, data: req.body });
     res.json(updated);
   } catch (error) { res.status(500).json({ error: 'Failed to update trip' }); }
 });
 
-app.delete('/api/logistics/:id', async (req, res) => {
+app.delete('/api/logistics-trips/:id', async (req, res) => {
   try {
     await prisma.logisticsTrip.delete({ where: { trip_id: req.params.id } });
     res.json({ message: 'Trip deleted' });
@@ -269,12 +269,12 @@ app.delete('/api/licences/:id', async (req, res) => {
 });
 
 // --- FREIGHT JOBS ---
-app.get('/api/freight', async (req, res) => {
+app.get('/api/freight-jobs', async (req, res) => {
   try { const freight = await prisma.freightJob.findMany(); res.json(freight); } 
   catch (error) { res.status(500).json({ error: 'Failed to fetch freight jobs' }); }
 });
 
-app.post('/api/freight', async (req, res) => {
+app.post('/api/freight-jobs', async (req, res) => {
   try {
     const data = req.body;
     const job = await prisma.freightJob.create({
@@ -284,14 +284,14 @@ app.post('/api/freight', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to create freight job' }); }
 });
 
-app.put('/api/freight/:id', async (req, res) => {
+app.put('/api/freight-jobs/:id', async (req, res) => {
   try {
     const updated = await prisma.freightJob.update({ where: { job_id: req.params.id }, data: req.body });
     res.json(updated);
   } catch (error) { res.status(500).json({ error: 'Failed to update freight job' }); }
 });
 
-app.delete('/api/freight/:id', async (req, res) => {
+app.delete('/api/freight-jobs/:id', async (req, res) => {
   try {
     await prisma.freightJob.delete({ where: { job_id: req.params.id } });
     res.json({ message: 'Freight job deleted' });

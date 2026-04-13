@@ -115,9 +115,9 @@ function App() {
       const [clients, vendors, freight, docJobsRes, logistics, clearance, licences] = await Promise.all([
         fetch('http://localhost:3000/api/clients').then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
         fetch('http://localhost:3000/api/vendors').then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
-        fetch('http://localhost:3000/api/freight').then(r => { if (!r.ok) throw new Error('freight'); return r.json(); }),
+        fetch('http://localhost:3000/api/freight-jobs').then(r => { if (!r.ok) throw new Error('freight-jobs'); return r.json(); }),
         fetch('http://localhost:3000/api/doc-jobs').then(r => { if (!r.ok) throw new Error('doc-jobs'); return r.json(); }),
-        fetch('http://localhost:3000/api/logistics').then(r => { if (!r.ok) throw new Error('logistics'); return r.json(); }),
+        fetch('http://localhost:3000/api/logistics-trips').then(r => { if (!r.ok) throw new Error('logistics-trips'); return r.json(); }),
         fetch('http://localhost:3000/api/clearance-jobs').then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
         fetch('http://localhost:3000/api/licences').then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
       ]);
@@ -196,7 +196,7 @@ function App() {
   const handleDeleteFreight = async (id) => {
     if(window.confirm('Are you sure you want to delete this shipment?')) {
       try {
-        await fetch(`http://localhost:3000/api/freight/${id}`, { method: 'DELETE' });
+        await fetch(`http://localhost:3000/api/freight-jobs/${id}`, { method: 'DELETE' });
         if(selectedFreightJob?.id === id) setSelectedFreightJob(null);
         fetchAllData();
       } catch (e) { alert('Failed to delete shipment'); }
@@ -206,7 +206,7 @@ function App() {
   const handleDeleteLogistics = async (id) => {
     if(window.confirm('Are you sure you want to delete this trip?')) {
       try {
-        await fetch(`http://localhost:3000/api/logistics/${id}`, { method: 'DELETE' });
+        await fetch(`http://localhost:3000/api/logistics-trips/${id}`, { method: 'DELETE' });
         if(selectedLogisticsTrip?.id === id) setSelectedLogisticsTrip(null);
         fetchAllData();
       } catch (e) { alert('Failed to delete trip'); }
