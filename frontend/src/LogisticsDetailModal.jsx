@@ -1,7 +1,10 @@
-import { X, Truck, MapPin, User, Clock, AlertTriangle, CheckCircle2, Phone, Navigation, ArrowRight, FileText } from 'lucide-react';
+import { X, Truck, MapPin, User, Clock, AlertTriangle, CheckCircle2, Phone, Navigation, ArrowRight, FileText, Download, ShieldCheck } from 'lucide-react';
 import './modal.css';
 
-export default function LogisticsDetailModal({ isOpen, onClose, trip, onEdit, onDelete }) {
+export default function LogisticsDetailModal({ 
+  isOpen, onClose, trip, onEdit, onDelete,
+  onUploadDoc, onDownloadDoc, uploadFile, setUploadFile, newDocName, setNewDocName
+}) {
   if (!isOpen || !trip) return null;
 
   return (
@@ -106,11 +109,56 @@ export default function LogisticsDetailModal({ isOpen, onClose, trip, onEdit, on
              </div>
              
              <button className="btn-primary" style={{ marginTop: 'auto', width: '100%' }}>Update GPS Segment <ArrowRight size={16} /></button>
-          </div>
+            </div>
 
-        </div>
+            {/* Document Vault Section */}
+            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 className="section-title" style={{ marginBottom: 0 }}>Trip Documents</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                     <input 
+                        placeholder="Document Name" 
+                        value={newDocName} 
+                        onChange={(e) => setNewDocName(e.target.value)}
+                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', fontSize: '0.8rem', width: '150px' }}
+                     />
+                     <label className="btn-icon" style={{ cursor: 'pointer', backgroundColor: uploadFile ? 'var(--info-bg)' : 'var(--surface-color)', border: '1px solid var(--border-color)', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={uploadFile ? uploadFile.name : 'Select File'}>
+                        <input 
+                           type="file" 
+                           style={{ display: 'none' }} 
+                           onChange={(e) => setUploadFile(e.target.files[0])}
+                        />
+                        <FileText size={18} color={uploadFile ? 'var(--info-text)' : 'inherit'} />
+                     </label>
+                     <button 
+                       className="btn-primary" 
+                       style={{ padding: '0.5rem 1rem' }}
+                       onClick={() => onUploadDoc('logisticsTrip', trip.trip_id, newDocName)}
+                       disabled={!uploadFile || !newDocName}
+                     >
+                        Upload
+                     </button>
+                  </div>
+               </div>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  {(trip.documents || []).length > 0 ? trip.documents.map((doc, idx) => (
+                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                           <FileText size={18} color="var(--primary-color)" />
+                           <div>
+                              <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc.name}</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(doc.createdAt).toLocaleDateString()}</div>
+                           </div>
+                        </div>
+                        <button className="btn-icon" onClick={() => onDownloadDoc(doc.id, doc.name)}><Download size={14} /></button>
+                     </div>
+                  )) : <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: '8px' }}>No documents uploaded.</div>}
+               </div>
+            </div>
 
-        <div className="modal-footer">
+         </div>
+
+         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>Close</button>
           <button className="btn-primary">Confirm Delivery</button>
         </div>

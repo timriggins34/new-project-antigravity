@@ -51,6 +51,10 @@ model User {
 
   createdDocuments Document[] @relation("DocumentCreator")
   updatedDocuments Document[] @relation("DocumentUpdater")
+
+  // Assigned Tasks
+  assignedClearanceJobs ClearanceJob[] @relation("ClearanceJobAssignee")
+  assignedLogisticsTrips LogisticsTrip[] @relation("LogisticsTripAssignee")
 }
 
 model AuditLog {
@@ -128,6 +132,7 @@ model Vendor {
   
   clearanceJobs ClearanceJob[]
   freightJobs   FreightJob[]
+  documents     Document[]
 
   // Traceability
   createdById       String?
@@ -147,8 +152,10 @@ model ClearanceJob {
   stage    String
   status   String
   alert    Boolean
-  assigned String
   date     String
+
+  assignedToId      String?
+  assignedTo        User?    @relation("ClearanceJobAssignee", fields: [assignedToId], references: [id])
 
   // Duty & Stage Tracking
   icegateChallan String?
@@ -160,6 +167,7 @@ model ClearanceJob {
   // Relations
   vendors      Vendor[]
   hsCodeItems  HSCodeItem[]
+  documents    Document[]
 
   // Traceability
   createdById       String?
@@ -222,6 +230,11 @@ model LogisticsTrip {
   status  String
   eta     String
   delayed Boolean @default(false)
+
+  assignedToId      String?
+  assignedTo        User?    @relation("LogisticsTripAssignee", fields: [assignedToId], references: [id])
+  
+  documents         Document[]
 
   // Traceability
   createdById       String?
@@ -287,6 +300,15 @@ model Document {
   
   docJobId   String?
   docJob     DocJob?   @relation(fields: [docJobId], references: [id])
+
+  vendorId   String?
+  vendor     Vendor?   @relation(fields: [vendorId], references: [id])
+
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id])
+
+  logisticsTripId String?
+  logisticsTrip   LogisticsTrip? @relation(fields: [logisticsTripId], references: [id])
 
   // Traceability
   createdById       String?

@@ -132,7 +132,7 @@ async function main() {
   // 4. CLEARANCE JOBS (with HS Code Items & Duty Tracking)
   await prisma.clearanceJob.create({
     data: {
-      job_id: 'IMP-8802', client: 'Global Tech Traders Pvt Ltd', port: 'INNSA1', type: 'Sea Import', stage: 'Assessment', status: 'pending', alert: false, assigned: 'Rahul S.', date: 'Today, 10:30',
+      job_id: 'IMP-8802', client: 'Global Tech Traders Pvt Ltd', port: 'INNSA1', type: 'Sea Import', stage: 'Assessment', status: 'pending', alert: false, assignedToId: emp1.id, date: 'Today, 10:30',
       icegateChallan: 'CHAL-2024-9981',
       dutyAmount: 145000.50,
       penalty: 500.00,
@@ -151,7 +151,7 @@ async function main() {
 
   await prisma.clearanceJob.create({
     data: {
-      job_id: 'IMP-8805', client: 'Alpha Manufacturing Ltd', port: 'INBOM4', type: 'Air Import', stage: 'OOC', status: 'completed', alert: false, assigned: 'Priya M.', date: 'Today, 14:15',
+      job_id: 'IMP-8805', client: 'Alpha Manufacturing Ltd', port: 'INBOM4', type: 'Air Import', stage: 'OOC', status: 'completed', alert: false, assignedToId: emp2.id, date: 'Today, 14:15',
       oocTimestamp: new Date('2024-04-12T16:30:00Z'),
       createdById: adminId,
       updatedById: adminId,
@@ -163,7 +163,7 @@ async function main() {
       vendors: { connect: [{ id: vendor2.id }] }
     }
   });
-  console.log('✅ Seeded clearance jobs with HS Codes and duty info');
+  console.log('✅ Seeded clearance jobs with HS Codes and duty info (linked to employees)');
 
   // 5. DOC JOBS (with relational documents and checklist flags)
   await prisma.docJob.create({
@@ -202,6 +202,7 @@ async function main() {
   await prisma.logisticsTrip.create({
     data: { 
       trip_id: 'TRP-501', job: 'IMP-8802', truck: 'MH-04-EY-1234', driver: 'Suresh Patil', from: 'JNPT Port', to: 'Vashi Warehouse', status: 'dispatch', eta: 'Today, 18:00', delayed: false,
+      assignedToId: emp1.id,
       createdById: adminId, updatedById: adminId
     }
   });

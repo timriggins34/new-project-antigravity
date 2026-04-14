@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Calculator } from 'lucide-react';
 import './modal.css';
 
-export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, initialData, clients, vendors }) {
+export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, initialData, clients, vendors, employees }) {
   const [formData, setFormData] = useState({
     client: '', port: 'INNSA1', type: 'Sea Import', stage: 'Filing', status: 'pending', 
-    alert: false, assigned: '', date: '', icegateChallan: '', dutyAmount: '', penalty: '', hsCodeItems: []
+    alert: false, assignedToId: '', date: '', icegateChallan: '', dutyAmount: '', penalty: '', hsCodeItems: []
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,7 +21,7 @@ export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, init
     } else {
       setFormData({
         client: clients?.[0]?.name || '', port: 'INNSA1', type: 'Sea Import', stage: 'Filing', status: 'pending', 
-        alert: false, assigned: '', date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), 
+        alert: false, assignedToId: '', date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), 
         icegateChallan: '', dutyAmount: '', penalty: '', hsCodeItems: []
       });
     }
@@ -113,6 +113,12 @@ export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, init
               <label>Current Stage * 
                 <select name="stage" value={formData.stage} onChange={handleChange}>
                   <option>Filing</option><option>Assessment</option><option>Duty</option><option>Exam</option><option>OOC</option>
+                </select>
+              </label>
+              <label>Assigned To
+                <select name="assignedToId" value={formData.assignedToId} onChange={handleChange}>
+                  <option value="">Unassigned</option>
+                  {employees?.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                 </select>
               </label>
             </div>

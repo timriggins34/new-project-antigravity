@@ -13,10 +13,11 @@ const EMPTY = {
   to: '',
   status: 'dispatch',
   eta: '',
-  delayed: false
+  delayed: false,
+  assignedToId: ''
 };
 
-export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initialData }) {
+export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initialData, employees }) {
   const [form, setForm] = useState(EMPTY);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,7 +40,7 @@ export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initial
     e.preventDefault();
     setIsSubmitting(true);
     const isEdit = !!initialData?.id;
-    const url = isEdit ? `http://localhost:3000/api/logistics/${initialData.id}` : 'http://localhost:3000/api/logistics';
+    const url = isEdit ? `http://localhost:3000/api/logistics-trips/${initialData.id}` : 'http://localhost:3000/api/logistics-trips';
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
@@ -102,6 +103,12 @@ export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initial
                   <option value="dispatch">Pending Dispatch</option>
                   <option value="enroute">En Route</option>
                   <option value="arrived">Arrived</option>
+                </select>
+              </label>
+              <label>Assigned To
+                <select name="assignedToId" value={form.assignedToId} onChange={handleChange}>
+                  <option value="">Unassigned</option>
+                  {employees?.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                 </select>
               </label>
               <label>ETA / Arrival Time

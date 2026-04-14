@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { X, Package, MapPin, User, Clock, AlertTriangle, CheckCircle2, FileText, ArrowRight, Download, Calculator, Save } from 'lucide-react';
 import './modal.css';
 
-export default function ClearanceDetailModal({ isOpen, onClose, job, docJobs, onEdit, onDelete, onAdvance, onRefresh }) {
+export default function ClearanceDetailModal({ 
+  isOpen, onClose, job, docJobs, onEdit, onDelete, onAdvance, onRefresh,
+  onUploadDoc, onDownloadDoc, uploadFile, setUploadFile, newDocName, setNewDocName
+}) {
   const [isDutyUpdating, setIsDutyUpdating] = useState(false);
   const [dutyData, setDutyData] = useState({
     icegateChallan: job?.icegateChallan || '',
@@ -195,9 +198,54 @@ export default function ClearanceDetailModal({ isOpen, onClose, job, docJobs, on
             </div>
           </div>
 
-        </div>
+            </div>
 
-        <div className="modal-footer">
+            {/* Document Vault Section */}
+            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 className="section-title" style={{ marginBottom: 0 }}>Document Vault</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                     <input 
+                        placeholder="Document Name" 
+                        value={newDocName} 
+                        onChange={(e) => setNewDocName(e.target.value)}
+                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', fontSize: '0.8rem', width: '150px' }}
+                     />
+                     <label className="btn-icon" style={{ cursor: 'pointer', backgroundColor: uploadFile ? 'var(--info-bg)' : 'var(--surface-color)', border: '1px solid var(--border-color)', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={uploadFile ? uploadFile.name : 'Select File'}>
+                        <input 
+                           type="file" 
+                           style={{ display: 'none' }} 
+                           onChange={(e) => setUploadFile(e.target.files[0])}
+                        />
+                        <FileText size={18} color={uploadFile ? 'var(--info-text)' : 'inherit'} />
+                     </label>
+                     <button 
+                       className="btn-primary" 
+                       style={{ padding: '0.5rem 1rem' }}
+                       onClick={() => onUploadDoc('clearanceJob', job.job_id, newDocName)}
+                       disabled={!uploadFile || !newDocName}
+                     >
+                        Upload Doc
+                     </button>
+                  </div>
+               </div>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  {(job.documents || []).length > 0 ? job.documents.map((doc, idx) => (
+                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                           <FileText size={18} color="var(--primary-color)" />
+                           <div>
+                              <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc.name}</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(doc.createdAt).toLocaleDateString()}</div>
+                           </div>
+                        </div>
+                        <button className="btn-icon" onClick={() => onDownloadDoc(doc.id, doc.name)}><Download size={14} /></button>
+                     </div>
+                  )) : <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: '8px' }}>No documents uploaded for this job.</div>}
+               </div>
+            </div>
+
+         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>Close Detail</button>
         </div>
       </div>

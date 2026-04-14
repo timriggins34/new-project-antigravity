@@ -128,6 +128,8 @@ function App() {
   const [logisticsTrips, setLogisticsTrips] = useState([]);
   const [clearanceJobs, setClearanceJobs] = useState([]);
   const [licencesData, setLicencesData] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [uploadFile, setUploadFile] = useState(null);
 
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
@@ -151,6 +153,66 @@ function App() {
   const [newDocName, setNewDocName] = useState('');
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [tripToDispatch, setTripToDispatch] = useState(null);
+
+  const handleUploadDoc = async (entityType, entityId, docName) => {
+    if (!uploadFile) return alert('Please select a file first.');
+    if (!docName) return alert('Please enter a document name.');
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    formData.append('documentName', docName);
+    formData.append('entityType', entityType);
+    formData.append('entityId', entityId);
+
+    // Specific linking IDs
+    if (entityType === 'client') formData.append('clientId', entityId);
+    if (entityType === 'vendor') formData.append('vendorId', entityId);
+    if (entityType === 'clearanceJob') formData.append('clearanceJobId', entityId);
+    if (entityType === 'logisticsTrip') formData.append('logisticsTripId', entityId);
+
+    try {
+      const res = await fetch('http://localhost:3000/api/documents/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token || localStorage.getItem('tf_token')}`
+        },
+        body: formData
+      });
+
+      if (res.ok) {
+        setUploadFile(null);
+        setNewDocName('');
+        fetchAllData();
+      } else {
+        alert('Upload failed. Please check file size and network.');
+      }
+    } catch (e) {
+      console.error('Upload Error:', e);
+    }
+  };
+
+  const handleDownloadDoc = async (docId, fileName) => {
+    try {
+      const currentToken = token || localStorage.getItem('tf_token');
+      const response = await fetch(`http://localhost:3000/api/documents/download/${docId}`, {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
+      
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error(e);
+      alert('Could not download file.');
+    }
+  };
 
   const handleUpdateDocJob = async (jobId, updates) => {
     try {
@@ -180,7 +242,7 @@ function App() {
         headers: { 'Authorization': `Bearer ${currentToken}` }
       };
 
-      const [clients, vendors, freight, docJobsRes, logistics, clearance, licences] = await Promise.all([
+      const [clients, vendors, freight, docJobsRes, logistics, clearance, licences, emps] = await Promise.all([
         fetch('http://localhost:3000/api/clients', fetchOptions).then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
         fetch('http://localhost:3000/api/vendors', fetchOptions).then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
         fetch('http://localhost:3000/api/freight-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('freight-jobs'); return r.json(); }),
@@ -188,6 +250,7 @@ function App() {
         fetch('http://localhost:3000/api/logistics-trips', fetchOptions).then(r => { if (!r.ok) throw new Error('logistics-trips'); return r.json(); }),
         fetch('http://localhost:3000/api/clearance-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
         fetch('http://localhost:3000/api/licences', fetchOptions).then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
+        fetch('http://localhost:3000/api/users/employees', fetchOptions).then(r => { if (!r.ok) throw new Error('employees'); return r.json(); }),
       ]);
 
       const mappedClients = clients.map(d => ({ ...d, id: d.client_id }));
@@ -205,6 +268,7 @@ function App() {
       setLogisticsTrips(mappedLogistics);
       setClearanceJobs(mappedClearance);
       setLicencesData(mappedLicences);
+      setEmployees(emps);
 
       setSelectedClient(prev => prev || (mappedClients[0]?.id ?? null));
       setSelectedVendor(prev => prev || (mappedVendors[0]?.id ?? null));
@@ -581,6 +645,7 @@ function App() {
           onSuccess={fetchAllData} 
           clients={clientsData}
           vendors={vendorsData}
+          employees={employees}
         />
         <LicenceFormModal 
           isOpen={isLicenceModalOpen || !!licenceToEdit} 
@@ -599,11 +664,18 @@ function App() {
           onClose={() => { setIsLogisticsModalOpen(false); setLogisticsToEdit(null); }} 
           initialData={logisticsToEdit}
           onSuccess={fetchAllData} 
+          employees={employees}
         />
         <SearchModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} />
         <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />
 
         <ClearanceDetailModal 
+          onUploadDoc={handleUploadDoc}
+          onDownloadDoc={handleDownloadDoc}
+          uploadFile={uploadFile}
+          setUploadFile={setUploadFile}
+          newDocName={newDocName}
+          setNewDocName={setNewDocName}
           isOpen={!!selectedDetailJob} 
           onClose={() => setSelectedDetailJob(null)} 
           job={selectedDetailJob} 
@@ -622,6 +694,12 @@ function App() {
           onRefresh={fetchAllData}
         />
         <LogisticsDetailModal 
+          onUploadDoc={handleUploadDoc}
+          onDownloadDoc={handleDownloadDoc}
+          uploadFile={uploadFile}
+          setUploadFile={setUploadFile}
+          newDocName={newDocName}
+          setNewDocName={setNewDocName}
           isOpen={!!selectedLogisticsTrip} 
           onClose={() => setSelectedLogisticsTrip(null)} 
           trip={selectedLogisticsTrip} 
@@ -802,7 +880,7 @@ function App() {
                               </div>
                             )}
                           </td>
-                          <td>{job.assigned}</td>
+                          <td>{job.assignedTo?.name || 'Unassigned'}</td>
                           <td style={{ color: 'var(--text-muted)' }}>{job.date}</td>
                           <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1398,10 +1476,7 @@ function App() {
                                <button 
                                  className="btn-primary" 
                                  style={{ padding: '0.5rem 1rem' }}
-                                 onClick={() => {
-                                   handleUploadDoc(activeClient.id, newDocName);
-                                   setNewDocName('');
-                                 }}
+                                 onClick={() => handleUploadDoc('client', activeClient.id, newDocName)}
                                >
                                   <UploadCloud size={16} /> Upload Doc
                                </button>
@@ -1509,42 +1584,92 @@ function App() {
                             <div style={{ fontWeight: 600, fontSize: '1rem' }}>{activeVendor.phone}</div>
                             <div style={{ fontSize: '0.875rem', color: 'var(--primary-color)' }}>{activeVendor.email}</div>
                          </div>
-                      </div>
+                                 {/* Connected Active Jobs Section */}
+                     <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                           <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <CheckCircle2 size={16} color="var(--success-text)"/> Clearance Assignments
+                           </h4>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                           {(activeVendor.clearanceJobs || []).length > 0 ? activeVendor.clearanceJobs.map(job => (
+                              <div key={job.job_id} style={{ padding: '0.5rem 1rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-text)', borderRadius: 'var(--radius-pill)', fontWeight: 600, fontSize: '0.875rem', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                                 #{job.job_id}
+                              </div>
+                           )) : <span style={{ color: 'var(--text-muted)' }}>No active clearance assignments.</span>}
+                        </div>
+                     </div>
 
-                       {/* Connected Active Jobs Section */}
-                       <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <CheckCircle2 size={16} color="var(--success-text)"/> Clearance Assignments
-                             </h4>
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                             {(activeVendor.clearanceJobs || []).length > 0 ? activeVendor.clearanceJobs.map(job => (
-                                <div key={job.job_id} style={{ padding: '0.5rem 1rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success-text)', borderRadius: 'var(--radius-pill)', fontWeight: 600, fontSize: '0.875rem', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-                                   #{job.job_id}
-                                </div>
-                             )) : <span style={{ color: 'var(--text-muted)' }}>No active clearance assignments.</span>}
-                          </div>
-                       </div>
+                     {/* Freight Assignments Section */}
+                     <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
+                           <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <History size={16} color="var(--text-muted)"/> Freight Forwarding History/Active
+                           </h4>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                           {(activeVendor.freightJobs || []).length > 0 ? activeVendor.freightJobs.map(job => (
+                              <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
+                                 <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>Job #{job.job_id}</span>
+                                 <span className="doc-status-badge doc-status-pending" style={{ fontSize: '0.65rem' }}>{job.status}</span>
+                              </div>
+                           )) : <span style={{ color: 'var(--text-muted)' }}>No freight history found.</span>}
+                        </div>
+                     </div>
 
-                       {/* Freight Assignments Section */}
-                       <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
-                             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <History size={16} color="var(--text-muted)"/> Freight Forwarding History/Active
-                             </h4>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                             {(activeVendor.freightJobs || []).length > 0 ? activeVendor.freightJobs.map(job => (
-                                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
-                                   <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>Job #{job.job_id}</span>
-                                   <span className="doc-status-badge doc-status-pending" style={{ fontSize: '0.65rem' }}>{job.status}</span>
-                                </div>
-                             )) : <span style={{ color: 'var(--text-muted)' }}>No freight history found.</span>}
-                          </div>
-                       </div>
+                     {/* Documents Section */}
+                     <div style={{ marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                           <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Document Vault</h4>
+                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <input 
+                                 placeholder="Document Name" 
+                                 value={newDocName} 
+                                 onChange={(e) => setNewDocName(e.target.value)}
+                                 style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', fontSize: '0.8rem', width: '150px' }}
+                              />
+                              <label className="btn-icon" style={{ cursor: 'pointer', backgroundColor: uploadFile ? 'var(--info-bg)' : 'var(--surface-color)', border: '1px solid var(--border-color)', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={uploadFile ? uploadFile.name : 'Select File'}>
+                                 <input 
+                                    type="file" 
+                                    style={{ display: 'none' }} 
+                                    onChange={(e) => setUploadFile(e.target.files[0])}
+                                 />
+                                 <Plus size={18} color={uploadFile ? 'var(--info-text)' : 'inherit'} />
+                              </label>
+                              <button 
+                                className="btn-primary" 
+                                style={{ padding: '0.5rem 1rem' }}
+                                onClick={() => handleUploadDoc('vendor', activeVendor.id, newDocName)}
+                                disabled={!uploadFile || !newDocName}
+                              >
+                                 <UploadCloud size={16} /> {uploadFile ? 'Upload' : 'Ready'}
+                              </button>
+                           </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                           {(activeVendor.documents || []).length > 0 ? activeVendor.documents.map((doc, idx) => (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-color)' }}>
+                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <FileText size={18} color="var(--primary-color)" />
+                                    <div>
+                                       <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{doc.name}</div>
+                                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>SAVED ON DISK</div>
+                                    </div>
+                                 </div>
+                                 <button 
+                                   className="btn-icon" 
+                                   style={{ width: '28px', height: '28px' }}
+                                   onClick={() => handleDownloadDoc(doc.id, doc.name)}
+                                 >
+                                   <Download size={14} />
+                                 </button>
+                              </div>
+                           )) : <div style={{ gridColumn: 'span 2', padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: '8px' }}>No documents uploaded for this vendor.</div>}
+                        </div>
+                     </div>
 
-                    </div>
+                  </div>
+            </div>
                   </>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>

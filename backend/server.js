@@ -4,7 +4,10 @@ const { PrismaClient } = require('@prisma/client');
 const cron = require('node-cron');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
 const { verifyToken, restrictIP } = require('./middleware/auth');
+const { upload, UPLOAD_ROOT } = require('./utils/storage');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -83,6 +86,17 @@ app.post('/api/auth/login', restrictIP, async (req, res) => {
 // Global protection for all /api routes defined below
 app.use('/api', verifyToken, restrictIP);
 
+// --- USERS & ASSIGNMENT ---
+app.get('/api/users/employees', async (req, res) => {
+  try {
+    const employees = await prisma.user.findMany({
+      where: { role: 'EMPLOYEE' },
+      select: { id: true, name: true, username: true }
+    });
+    res.json(employees);
+  } catch (error) { res.status(500).json({ error: 'Failed to fetch employees' }); }
+});
+
 // --- CLIENTS ---
 app.get('/api/clients', async (req, res) => {
   try {
@@ -136,7 +150,7 @@ app.delete('/api/clients/:id', async (req, res) => {
 app.get('/api/vendors', async (req, res) => {
   try {
     const vendors = await prisma.vendor.findMany({
-      include: { clearanceJobs: true, freightJobs: true }
+      include: { clearanceJobs: true, freightJobs: true, documents: true }
     });
     res.json(vendors);
   } catch (error) { res.status(500).json({ error: 'Failed to fetch vendors' }); }
@@ -159,7 +173,12 @@ app.post('/api/vendors', async (req, res) => {
 app.get('/api/clearance-jobs', async (req, res) => {
   try {
     const jobs = await prisma.clearanceJob.findMany({
-      include: { hsCodeItems: true, vendors: true }
+      include: { 
+        hsCodeItems: true, 
+        vendors: true, 
+        assignedTo: { select: { id: true, name: true } },
+        documents: true 
+      }
     });
     res.json(jobs);
   } catch (error) { res.status(500).json({ error: 'Failed to fetch clearance jobs' }); }
@@ -167,15 +186,16 @@ app.get('/api/clearance-jobs', async (req, res) => {
 
 app.post('/api/clearance-jobs', async (req, res) => {
   try {
-    const { hsCodeItems, vendors, ...rest } = req.body;
+    const { hsCodeItems, vendors, assignedToId, ...rest } = req.body;
     const job = await prisma.clearanceJob.create({
       data: {
         ...rest,
         job_id: `CJ-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
         hsCodeItems: hsCodeItems ? { create: hsCodeItems } : undefined,
-        vendors: vendors ? { connect: vendors.map(v => ({ id: v.id })) } : undefined
+        vendors: vendors ? { connect: vendors.map(v => ({ id: v.id })) } : undefined,
+        assignedToId: assignedToId || null
       },
-      include: { hsCodeItems: true, vendors: true }
+      include: { hsCodeItems: true, vendors: true, assignedTo: true }
     });
     res.status(201).json(job);
   } catch (error) { res.status(500).json({ error: 'Failed to create job' }); }
@@ -183,14 +203,15 @@ app.post('/api/clearance-jobs', async (req, res) => {
 
 app.put('/api/clearance-jobs/:id', async (req, res) => {
   try {
-    const { hsCodeItems, vendors, ...rest } = req.body;
+    const { hsCodeItems, vendors, assignedToId, ...rest } = req.body;
     const updated = await prisma.clearanceJob.update({
       where: { job_id: req.params.id },
       data: {
         ...rest,
-        vendors: vendors ? { set: vendors.map(v => ({ id: v.id })) } : undefined
+        vendors: vendors ? { set: vendors.map(v => ({ id: v.id })) } : undefined,
+        assignedToId: assignedToId || null
       },
-      include: { hsCodeItems: true, vendors: true }
+      include: { hsCodeItems: true, vendors: true, assignedTo: true }
     });
     res.json(updated);
   } catch (error) { res.status(500).json({ error: 'Failed to update job' }); }
@@ -225,7 +246,60 @@ app.get('/api/clearance/:id/tally-export', async (req, res) => {
   }
 });
 
-// Document Upload Endpoint
+// Smart Document Upload Endpoint (Disk Storage)
+app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const { 
+      documentName, 
+      entityType, 
+      entityId, 
+      clientId, 
+      docJobId, 
+      vendorId, 
+      clearanceJobId, 
+      logisticsTripId 
+    } = req.body;
+
+    // Save metadata to DB
+    const document = await prisma.document.create({
+      data: {
+        name: documentName || req.file.originalname,
+        url: req.file.path, // Store the disk path
+        clientId: clientId || null,
+        docJobId: docJobId || null,
+        vendorId: vendorId || null,
+        clearanceJobId: clearanceJobId || null,
+        logisticsTripId: logisticsTripId || null
+      }
+    });
+
+    res.status(201).json(document);
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// Document Download/Stream Endpoint
+app.get('/api/documents/download/:id', async (req, res) => {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc || !doc.url) return res.status(404).json({ error: 'Document not found' });
+
+    if (!fs.existsSync(doc.url)) {
+      return res.status(404).json({ error: 'File missing on local drive' });
+    }
+
+    res.download(doc.url, doc.name);
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ error: 'Failed to access document' });
+  }
+});
+
+// Legacy Record creation (still useful for simple links)
 app.post('/api/documents', async (req, res) => {
   try {
     const { name, url, clientId, docJobId } = req.body;
@@ -234,8 +308,7 @@ app.post('/api/documents', async (req, res) => {
     });
     res.status(201).json(document);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to upload document record' });
+    res.status(500).json({ error: 'Failed to create document record' });
   }
 });
 
@@ -261,7 +334,15 @@ app.patch('/api/doc-jobs/:id', async (req, res) => {
 
 // --- LOGISTICS TRIPS ---
 app.get('/api/logistics-trips', async (req, res) => {
-  try { const trips = await prisma.logisticsTrip.findMany(); res.json(trips); } 
+  try { 
+    const trips = await prisma.logisticsTrip.findMany({
+      include: { 
+        assignedTo: { select: { id: true, name: true } },
+        documents: true 
+      }
+    }); 
+    res.json(trips); 
+  } 
   catch (error) { res.status(500).json({ error: 'Failed to fetch trips' }); }
 });
 
@@ -280,9 +361,26 @@ app.patch('/api/logistics/:id/status', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to update logistics status' }); }
 });
 
+app.post('/api/logistics-trips', async (req, res) => {
+  try {
+    const { assignedToId, ...data } = req.body;
+    const trip = await prisma.logisticsTrip.create({
+      data: {
+        ...data,
+        assignedToId: assignedToId || null
+      },
+      include: { assignedTo: true }
+    });
+    res.status(201).json(trip);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create logistics trip' });
+  }
+});
+
 app.put('/api/logistics-trips/:id', async (req, res) => {
   try {
-    const data = req.body;
+    const { assignedToId, ...data } = req.body;
     const updated = await prisma.logisticsTrip.update({
       where: { trip_id: req.params.id },
       data: {
@@ -290,8 +388,10 @@ app.put('/api/logistics-trips/:id', async (req, res) => {
         driver: data.driver,
         status: data.status,
         eta: data.eta,
-        delayed: data.delayed
-      }
+        delayed: data.delayed,
+        assignedToId: assignedToId || null
+      },
+      include: { assignedTo: true }
     });
     res.json(updated);
   } catch (error) { res.status(500).json({ error: 'Failed to update logistics trip' }); }
