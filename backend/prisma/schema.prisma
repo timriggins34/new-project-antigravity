@@ -3,8 +3,66 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(EMPLOYEE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Audit Logs performed by this user
+  auditLogs    AuditLog[]
+
+  // Relations for created/updated records
+  createdClients Client[] @relation("ClientCreator")
+  updatedClients Client[] @relation("ClientUpdater")
+  
+  createdVendors Vendor[] @relation("VendorCreator")
+  updatedVendors Vendor[] @relation("VendorUpdater")
+
+  createdClearanceJobs ClearanceJob[] @relation("ClearanceJobCreator")
+  updatedClearanceJobs ClearanceJob[] @relation("ClearanceJobUpdater")
+
+  createdHSCodeItems HSCodeItem[] @relation("HSCodeItemCreator")
+  updatedHSCodeItems HSCodeItem[] @relation("HSCodeItemUpdater")
+
+  createdDocJobs DocJob[] @relation("DocJobCreator")
+  updatedDocJobs DocJob[] @relation("DocJobUpdater")
+
+  createdLogisticsTrips LogisticsTrip[] @relation("LogisticsTripCreator")
+  updatedLogisticsTrips LogisticsTrip[] @relation("LogisticsTripUpdater")
+
+  createdLicences Licence[] @relation("LicenceCreator")
+  updatedLicences Licence[] @relation("LicenceUpdater")
+
+  createdFreightJobs FreightJob[] @relation("FreightJobCreator")
+  updatedFreightJobs FreightJob[] @relation("FreightJobUpdater")
+
+  createdDocuments Document[] @relation("DocumentCreator")
+  updatedDocuments Document[] @relation("DocumentUpdater")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String   // e.g., 'CREATE', 'UPDATE', 'DELETE'
+  entityName String
+  entityId   String
+  details    Json
+  timestamp  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
 }
 
 model Client {
@@ -49,6 +107,14 @@ model Client {
   details           String?
 
   documents         Document[]
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("ClientCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("ClientUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Vendor {
@@ -62,6 +128,14 @@ model Vendor {
   
   clearanceJobs ClearanceJob[]
   freightJobs   FreightJob[]
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("VendorCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("VendorUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model ClearanceJob {
@@ -86,6 +160,14 @@ model ClearanceJob {
   // Relations
   vendors      Vendor[]
   hsCodeItems  HSCodeItem[]
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("ClearanceJobCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("ClearanceJobUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model HSCodeItem {
@@ -96,6 +178,14 @@ model HSCodeItem {
   
   clearanceJobId  String
   clearanceJob    ClearanceJob @relation(fields: [clearanceJobId], references: [id])
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("HSCodeItemCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("HSCodeItemUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model DocJob {
@@ -111,6 +201,14 @@ model DocJob {
 
   // Relations
   documents      Document[]
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("DocJobCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("DocJobUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model LogisticsTrip {
@@ -124,6 +222,14 @@ model LogisticsTrip {
   status  String
   eta     String
   delayed Boolean @default(false)
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("LogisticsTripCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("LogisticsTripUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Licence {
@@ -135,6 +241,14 @@ model Licence {
   expiry     String
   utilized   Int?
   alert      Boolean
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("LicenceCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("LicenceUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model FreightJob {
@@ -152,6 +266,14 @@ model FreightJob {
   alert  Boolean
 
   vendors Vendor[]
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("FreightJobCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("FreightJobUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Document {
@@ -165,4 +287,12 @@ model Document {
   
   docJobId   String?
   docJob     DocJob?   @relation(fields: [docJobId], references: [id])
+
+  // Traceability
+  createdById       String?
+  createdBy         User?    @relation("DocumentCreator", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?    @relation("DocumentUpdater", fields: [updatedById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

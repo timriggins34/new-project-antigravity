@@ -36,8 +36,10 @@ import {
   History,
   Waves,
   Compass,
-  Anchor
+  Anchor,
+  LogOut
 } from 'lucide-react';
+import Login from './Login';
 import './App.css';
 import './clearance.css';
 import './docs.css';
@@ -57,6 +59,8 @@ import LogisticsDetailModal from './LogisticsDetailModal';
 import DispatchModal from './DispatchModal';
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState(null);
@@ -67,6 +71,41 @@ function App() {
   const [licenceFilter, setLicenceFilter] = useState('All');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  /**
+   * Helper to include JWT token in all API requests automatically
+   */
+  const authenticatedFetch = async (url, options = {}) => {
+    const currentToken = token || localStorage.getItem('tf_token');
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${currentToken}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(url, { ...options, headers });
+    
+    if (res.status === 401 || res.status === 403) {
+      // Token expired or invalid
+      handleLogout();
+      return null;
+    }
+    
+    return res;
+  };
+
+  const handleLogin = (userData, userToken) => {
+    setUser(userData);
+    setToken(userToken);
+    fetchAllData(userToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('tf_token');
+    localStorage.removeItem('tf_user');
+    setUser(null);
+    setToken(null);
+  };
 
   const navigation = [
     { id: 'dashboard', label: 'Dashboard Overview', icon: LayoutDashboard },
@@ -115,28 +154,40 @@ function App() {
 
   const handleUpdateDocJob = async (jobId, updates) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/doc-jobs/${jobId}`, {
+      const res = await authenticatedFetch(`http://localhost:3000/api/doc-jobs/${jobId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
-      if (res.ok) fetchAllData();
-      else alert('Failed to update documentation details');
+      if (res && res.ok) fetchAllData();
+      else if (res) alert('Failed to update documentation details');
     } catch (e) { console.error(e); }
   };
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (activeToken = null) => {
     setIsLoading(true);
     setError(null);
+    
+    // Use provided token or current state/localStorage
+    const currentToken = activeToken || token || localStorage.getItem('tf_token');
+    
+    if (!currentToken) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      const fetchOptions = {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      };
+
       const [clients, vendors, freight, docJobsRes, logistics, clearance, licences] = await Promise.all([
-        fetch('http://localhost:3000/api/clients').then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
-        fetch('http://localhost:3000/api/vendors').then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
-        fetch('http://localhost:3000/api/freight-jobs').then(r => { if (!r.ok) throw new Error('freight-jobs'); return r.json(); }),
-        fetch('http://localhost:3000/api/doc-jobs').then(r => { if (!r.ok) throw new Error('doc-jobs'); return r.json(); }),
-        fetch('http://localhost:3000/api/logistics-trips').then(r => { if (!r.ok) throw new Error('logistics-trips'); return r.json(); }),
-        fetch('http://localhost:3000/api/clearance-jobs').then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
-        fetch('http://localhost:3000/api/licences').then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
+        fetch('http://localhost:3000/api/clients', fetchOptions).then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
+        fetch('http://localhost:3000/api/vendors', fetchOptions).then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
+        fetch('http://localhost:3000/api/freight-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('freight-jobs'); return r.json(); }),
+        fetch('http://localhost:3000/api/doc-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('doc-jobs'); return r.json(); }),
+        fetch('http://localhost:3000/api/logistics-trips', fetchOptions).then(r => { if (!r.ok) throw new Error('logistics-trips'); return r.json(); }),
+        fetch('http://localhost:3000/api/clearance-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
+        fetch('http://localhost:3000/api/licences', fetchOptions).then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
       ]);
 
       const mappedClients = clients.map(d => ({ ...d, id: d.client_id }));
@@ -155,28 +206,40 @@ function App() {
       setClearanceJobs(mappedClearance);
       setLicencesData(mappedLicences);
 
-      // Auto-select first items if nothing is selected
       setSelectedClient(prev => prev || (mappedClients[0]?.id ?? null));
       setSelectedVendor(prev => prev || (mappedVendors[0]?.id ?? null));
       setSelectedDocJob(prev => prev || (mappedDocJobs[0]?.id ?? null));
     } catch (err) {
       console.error('API fetch failed:', err);
-      setError('Failed to load data from the server. Please ensure the backend is running on port 3000.');
+      if (err.message !== 'clients') { // Avoid multiple alerts if one fails
+         setError('Failed to load data from the server. Your session may have expired.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAllData();
+    const savedToken = localStorage.getItem('tf_token');
+    const savedUser = localStorage.getItem('tf_user');
+    
+    if (savedToken && savedUser) {
+      setToken(savedToken);
+      setUser(JSON.parse(savedUser));
+      fetchAllData(savedToken);
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const handleDeleteClient = async (id) => {
     if(window.confirm('Are you sure you want to delete this client?')) {
       try {
-        await fetch(`http://localhost:3000/api/clients/${id}`, { method: 'DELETE' });
-        if (selectedClient === id) setSelectedClient(null);
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/clients/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+          if (selectedClient === id) setSelectedClient(null);
+          fetchAllData();
+        }
       } catch (e) { alert('Failed to delete client'); }
     }
   };
@@ -184,9 +247,11 @@ function App() {
   const handleDeleteVendor = async (id) => {
     if(window.confirm('Are you sure you want to delete this vendor?')) {
       try {
-        await fetch(`http://localhost:3000/api/vendors/${id}`, { method: 'DELETE' });
-        if (selectedVendor === id) setSelectedVendor(null);
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/vendors/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+          if (selectedVendor === id) setSelectedVendor(null);
+          fetchAllData();
+        }
       } catch (e) { alert('Failed to delete vendor'); }
     }
   };
@@ -194,8 +259,8 @@ function App() {
   const handleDeleteLicence = async (id) => {
     if(window.confirm('Are you sure you want to delete this licence?')) {
       try {
-        await fetch(`http://localhost:3000/api/licences/${id}`, { method: 'DELETE' });
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/licences/${id}`, { method: 'DELETE' });
+        if (res && res.ok) fetchAllData();
       } catch (e) { alert('Failed to delete licence'); }
     }
   };
@@ -203,9 +268,11 @@ function App() {
   const handleDeleteClearance = async (id) => {
     if(window.confirm('Are you sure you want to delete this clearance job?')) {
       try {
-        await fetch(`http://localhost:3000/api/clearance-jobs/${id}`, { method: 'DELETE' });
-        if(selectedDetailJob?.id === id) setSelectedDetailJob(null);
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/clearance-jobs/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+          if(selectedDetailJob?.id === id) setSelectedDetailJob(null);
+          fetchAllData();
+        }
       } catch (e) { alert('Failed to delete job'); }
     }
   };
@@ -213,9 +280,11 @@ function App() {
   const handleDeleteFreight = async (id) => {
     if(window.confirm('Are you sure you want to delete this shipment?')) {
       try {
-        await fetch(`http://localhost:3000/api/freight-jobs/${id}`, { method: 'DELETE' });
-        if(selectedFreightJob?.id === id) setSelectedFreightJob(null);
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/freight-jobs/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+          if(selectedFreightJob?.id === id) setSelectedFreightJob(null);
+          fetchAllData();
+        }
       } catch (e) { alert('Failed to delete shipment'); }
     }
   };
@@ -223,22 +292,23 @@ function App() {
   const handleDeleteLogistics = async (id) => {
     if(window.confirm('Are you sure you want to delete this trip?')) {
       try {
-        await fetch(`http://localhost:3000/api/logistics-trips/${id}`, { method: 'DELETE' });
-        if(selectedLogisticsTrip?.id === id) setSelectedLogisticsTrip(null);
-        fetchAllData();
+        const res = await authenticatedFetch(`http://localhost:3000/api/logistics-trips/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+          if(selectedLogisticsTrip?.id === id) setSelectedLogisticsTrip(null);
+          fetchAllData();
+        }
       } catch (e) { alert('Failed to delete trip'); }
     }
   };
 
   const advanceJobStage = async (jobId) => {
-    // 1. Find the job in current state
     const job = clearanceJobs.find(j => j.id === jobId);
     if (!job) return;
     const currentIdx = stages.indexOf(job.stage);
     if (currentIdx === -1) return;
     const isLastStage = currentIdx === stages.length - 1;
 
-    // 2. Optimistic update — immediately reflect in UI
+    // Optimistic update
     const optimisticNextStage = isLastStage ? job.stage : stages[currentIdx + 1];
     const optimisticStatus = isLastStage ? 'completed' : 'pending';
     setClearanceJobs(prev =>
@@ -249,15 +319,13 @@ function App() {
       )
     );
 
-    // 3. PATCH request to backend
     try {
-      const res = await fetch(`http://localhost:3000/api/clearance-jobs/${jobId}/advance`, {
+      const res = await authenticatedFetch(`http://localhost:3000/api/clearance-jobs/${jobId}/advance`, {
         method: 'PATCH',
       });
-      if (!res.ok) throw new Error('Server error');
+      if (!res || !res.ok) throw new Error('Server error');
       const updated = await res.json();
 
-      // 4. Reconcile with server response (source of truth)
       setClearanceJobs(prev =>
         prev.map(j =>
           j.id === jobId
@@ -267,13 +335,13 @@ function App() {
       );
     } catch (err) {
       console.error('Failed to advance stage:', err);
-      // 5. Rollback optimistic update on failure
+      // Rollback
       setClearanceJobs(prev =>
         prev.map(j =>
-          j.id === jobId ? job : j // restore original
+          j.id === jobId ? job : j
         )
       );
-      alert(`Could not advance job ${jobId}. Please try again.`);
+      if (err.message !== 'Session expired') alert(`Could not advance job ${jobId}. Please try again.`);
     }
   };
 
@@ -285,9 +353,8 @@ function App() {
     if (!tripId) return;
     setLogisticsTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: newStatus } : t));
     try {
-      await fetch(`http://localhost:3000/api/logistics/${tripId}/status`, {
+      await authenticatedFetch(`http://localhost:3000/api/logistics/${tripId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
     } catch (e) { fetchAllData(); }
@@ -295,12 +362,11 @@ function App() {
 
   const handleDispatchSubmit = async (tripId, data) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/logistics-trips/${tripId}`, {
+      const res = await authenticatedFetch(`http://localhost:3000/api/logistics-trips/${tripId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, status: 'enroute' })
       });
-      if (res.ok) {
+      if (res && res.ok) {
         fetchAllData();
         return true;
       }
@@ -394,6 +460,8 @@ function App() {
     </div>
   );
 
+  if (!user) return <Login onLogin={handleLogin} />;
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -422,11 +490,14 @@ function App() {
         </nav>
 
         <div className="user-profile">
-          <div className="avatar">JD</div>
+          <div className="avatar">{user ? user.name.split(' ').map(n => n[0]).join('') : '??'}</div>
           <div className="user-info">
-            <span className="user-name">John Doe</span>
-            <span className="user-role">Operations Manager</span>
+            <span className="user-name">{user ? user.name : 'Unknown User'}</span>
+            <span className="user-role">{user ? user.role : 'Authorized Staff'}</span>
           </div>
+          <button className="logout-btn-sidebar" onClick={handleLogout} title="Sign Out">
+            <LogOut size={18} />
+          </button>
         </div>
       </aside>
 

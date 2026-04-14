@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const cron = require('node-cron');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { verifyToken, restrictIP } = require('./middleware/auth');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -41,7 +44,44 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-// --- API ENDPOINTS ---
+// --- AUTH ENDPOINTS ---
+app.post('/api/auth/login', restrictIP, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { username } });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        name: user.name,
+        username: user.username,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// --- API ENDPOINTS (PROTECTED) ---
+// Global protection for all /api routes defined below
+app.use('/api', verifyToken, restrictIP);
 
 // --- CLIENTS ---
 app.get('/api/clients', async (req, res) => {
