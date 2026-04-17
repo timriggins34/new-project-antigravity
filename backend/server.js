@@ -450,6 +450,14 @@ app.put('/api/freight-jobs/:id', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to update freight job' }); }
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('🔥 Server Error:', err.stack);
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  res.status(status).json({ error: message });
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

@@ -12,7 +12,7 @@ const EMPTY = {
   expiry: '', utilized: '', alert: false,
 };
 
-export default function LicenceFormModal({ isOpen, onClose, onSuccess, initialData }) {
+export default function LicenceFormModal({ isOpen, onClose, onSuccess, initialData, authFetch }) {
   const [form, setForm] = useState(EMPTY);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,14 +46,21 @@ export default function LicenceFormModal({ isOpen, onClose, onSuccess, initialDa
       utilized: form.utilized !== '' ? parseInt(form.utilized, 10) : null,
     };
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (res.ok) { onSuccess(); onClose(); setForm(EMPTY); }
-      else alert(`Failed to ${isEdit ? 'update' : 'create'} licence.`);
-    } catch { alert('Error saving licence.'); }
+      if (res.ok) { 
+        onSuccess(); 
+        onClose(); 
+        setForm(EMPTY); 
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save licence.'}`);
+      }
+    } catch { 
+      alert('Network error: Could not reach the server.'); 
+    }
     setIsSubmitting(false);
   };
 

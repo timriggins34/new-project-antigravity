@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Building2, ShieldCheck, MapPin, CreditCard, FileText, UploadCloud } from 'lucide-react';
 import './modal.css';
 
-export default function ClientFormModal({ isOpen, onClose, onSuccess, initialData }) {
+export default function ClientFormModal({ isOpen, onClose, onSuccess, initialData, authFetch }) {
   const [activeTab, setActiveTab] = useState('general');
   const [formData, setFormData] = useState({
     name: '', nickname: '', clientType: 'Importer', constitution: 'Pvt Ltd', status: 'Active', clientSinceYear: '',
@@ -43,20 +43,20 @@ export default function ClientFormModal({ isOpen, onClose, onSuccess, initialDat
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const resp = await fetch(url, {
+      const resp = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       if (resp.ok) {
         onSuccess();
         onClose();
       } else {
-        alert(`Failed to ${isEdit ? 'update' : 'save'} client.`);
+        const errorData = await resp.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save client profile.'}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving client.");
+      alert("Network error: Could not reach the server.");
     }
     setIsSubmitting(false);
   };

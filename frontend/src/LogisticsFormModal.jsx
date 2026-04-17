@@ -17,7 +17,7 @@ const EMPTY = {
   assignedToId: ''
 };
 
-export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initialData, employees }) {
+export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initialData, employees, authFetch }) {
   const [form, setForm] = useState(EMPTY);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -44,9 +44,8 @@ export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initial
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       if (res.ok) {
@@ -54,10 +53,11 @@ export default function LogisticsFormModal({ isOpen, onClose, onSuccess, initial
         onClose();
         setForm(EMPTY);
       } else {
-        alert(`Failed to ${isEdit ? 'update' : 'save'} logistics trip.`);
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save logistics trip.'}`);
       }
     } catch {
-      alert('Error saving logistics trip.');
+      alert('Network error: Could not reach the server.');
     } finally {
       setIsSubmitting(false);
     }

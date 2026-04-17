@@ -19,7 +19,7 @@ const EMPTY = {
   alert: false
 };
 
-export default function FreightFormModal({ isOpen, onClose, onSuccess, initialData }) {
+export default function FreightFormModal({ isOpen, onClose, onSuccess, initialData, authFetch }) {
   const [form, setForm] = useState(EMPTY);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -70,9 +70,8 @@ export default function FreightFormModal({ isOpen, onClose, onSuccess, initialDa
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       if (res.ok) {
@@ -80,10 +79,11 @@ export default function FreightFormModal({ isOpen, onClose, onSuccess, initialDa
         onClose();
         setForm(EMPTY);
       } else {
-        alert(`Failed to save shipment.`);
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save shipment.'}`);
       }
     } catch {
-      alert('Error saving freight shipment.');
+      alert('Network error: Could not reach the server.');
     } finally {
       setIsSubmitting(false);
     }

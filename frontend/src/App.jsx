@@ -79,19 +79,36 @@ function App() {
     const currentToken = token || localStorage.getItem('tf_token');
     const headers = {
       ...options.headers,
-      'Authorization': `Bearer ${currentToken}`,
-      'Content-Type': 'application/json'
+      'Authorization': `Bearer ${currentToken}`
     };
+    
+    // Only set JSON content-type if not sending FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
     
     const res = await fetch(url, { ...options, headers });
     
     if (res.status === 401 || res.status === 403) {
-      // Token expired or invalid
       handleLogout();
       return null;
     }
     
     return res;
+  };
+
+  /**
+   * Safe JSON extraction that gracefully handles non-JSON responses
+   */
+  const handleApiResponse = async (res, defaultMsg) => {
+    if (res.ok) return true;
+    try {
+      const data = await res.json();
+      alert(`Error: ${data.error || defaultMsg}`);
+    } catch (e) {
+      alert(`Error: ${defaultMsg} (Server returned non-JSON response)`);
+    }
+    return false;
   };
 
   const handleLogin = (userData, userToken) => {
@@ -171,23 +188,19 @@ function App() {
     if (entityType === 'logisticsTrip') formData.append('logisticsTripId', entityId);
 
     try {
-      const res = await fetch('http://localhost:3000/api/documents/upload', {
+      const res = await authenticatedFetch('http://localhost:3000/api/documents/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token || localStorage.getItem('tf_token')}`
-        },
         body: formData
       });
 
-      if (res.ok) {
+      if (await handleApiResponse(res, 'File upload failed.')) {
         setUploadFile(null);
         setNewDocName('');
         fetchAllData();
-      } else {
-        alert('Upload failed. Please check file size and network.');
       }
     } catch (e) {
       console.error('Upload Error:', e);
+      alert('Network error during upload.');
     }
   };
 
@@ -631,12 +644,14 @@ function App() {
           onClose={() => { setIsClientModalOpen(false); setClientToEdit(null); }} 
           initialData={clientToEdit}
           onSuccess={fetchAllData} 
+          authFetch={authenticatedFetch}
         />
         <VendorFormModal 
           isOpen={isVendorModalOpen || !!vendorToEdit} 
           onClose={() => { setIsVendorModalOpen(false); setVendorToEdit(null); }} 
           initialData={vendorToEdit}
           onSuccess={fetchAllData} 
+          authFetch={authenticatedFetch}
         />
         <ClearanceJobFormModal 
           isOpen={isClearanceJobModalOpen || !!clearanceToEdit} 
@@ -646,18 +661,22 @@ function App() {
           clients={clientsData}
           vendors={vendorsData}
           employees={employees}
+          authFetch={authenticatedFetch}
         />
         <LicenceFormModal 
           isOpen={isLicenceModalOpen || !!licenceToEdit} 
           onClose={() => { setIsLicenceModalOpen(false); setLicenceToEdit(null); }} 
           initialData={licenceToEdit}
           onSuccess={fetchAllData} 
+          authFetch={authenticatedFetch}
         />
         <FreightFormModal 
           isOpen={isFreightModalOpen || !!freightToEdit} 
           onClose={() => { setIsFreightModalOpen(false); setFreightToEdit(null); }} 
           initialData={freightToEdit}
           onSuccess={fetchAllData} 
+          vendors={vendorsData}
+          authFetch={authenticatedFetch}
         />
         <LogisticsFormModal 
           isOpen={isLogisticsModalOpen || !!logisticsToEdit} 
@@ -665,6 +684,7 @@ function App() {
           initialData={logisticsToEdit}
           onSuccess={fetchAllData} 
           employees={employees}
+          authFetch={authenticatedFetch}
         />
         <SearchModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} />
         <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />

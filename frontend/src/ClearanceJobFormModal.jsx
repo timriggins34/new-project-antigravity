@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Calculator } from 'lucide-react';
 import './modal.css';
 
-export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, initialData, clients, vendors, employees }) {
+export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, initialData, clients, vendors, employees, authFetch }) {
   const [formData, setFormData] = useState({
     client: '', port: 'INNSA1', type: 'Sea Import', stage: 'Filing', status: 'pending', 
     alert: false, assignedToId: '', date: '', icegateChallan: '', dutyAmount: '', penalty: '', hsCodeItems: []
@@ -65,20 +65,20 @@ export default function ClearanceJobFormModal({ isOpen, onClose, onSuccess, init
     };
 
     try {
-      const resp = await fetch(url, {
+      const resp = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (resp.ok) {
         onSuccess();
         onClose();
       } else {
-        alert('Failed to save clearance job.');
+        const errorData = await resp.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save clearance job.'}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving job.");
+      alert("Network error: Could not reach the server.");
     }
     setIsSubmitting(false);
   };

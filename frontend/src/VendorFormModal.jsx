@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Building2 } from 'lucide-react';
 import './modal.css';
 
-export default function VendorFormModal({ isOpen, onClose, onSuccess, initialData }) {
+export default function VendorFormModal({ isOpen, onClose, onSuccess, initialData, authFetch }) {
   const [formData, setFormData] = useState({
     name: '', type: 'Trucking', contact: '', phone: '', email: ''
   });
@@ -43,20 +43,20 @@ export default function VendorFormModal({ isOpen, onClose, onSuccess, initialDat
     };
 
     try {
-      const resp = await fetch(url, {
+      const resp = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submissionData)
       });
       if (resp.ok) {
         onSuccess();
         onClose();
       } else {
-        alert('Failed to save vendor.');
+        const errorData = await resp.json().catch(() => ({}));
+        alert(`Error: ${errorData.error || 'Failed to save vendor.'}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving vendor.");
+      alert("Network error: Could not reach the server.");
     }
     setIsSubmitting(false);
   };
