@@ -111,6 +111,8 @@ model Client {
   details           String?
 
   documents         Document[]
+  masterJobs        MasterJob[]
+
 
   // Traceability
   createdById       String?
@@ -153,6 +155,10 @@ model ClearanceJob {
   status   String
   alert    Boolean
   date     String
+
+  masterJobId       String?
+  masterJob         MasterJob? @relation(fields: [masterJobId], references: [id])
+
 
   assignedToId      String?
   assignedTo        User?    @relation("ClearanceJobAssignee", fields: [assignedToId], references: [id])
@@ -278,6 +284,10 @@ model FreightJob {
   status String
   alert  Boolean
 
+  masterJobId       String?
+  masterJob         MasterJob? @relation(fields: [masterJobId], references: [id])
+
+
   vendors Vendor[]
 
   // Traceability
@@ -318,3 +328,83 @@ model Document {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
+
+enum MasterDocumentType {
+  SHIPMENT
+  ONE_TIME
+  RECURRING
+  CONTAINER
+}
+
+enum ChecklistStatus {
+  MISSING
+  VERIFY
+  DONE
+}
+
+model MasterJob {
+  id             String   @id @default(uuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id])
+  direction      String   // Import/Export
+  mode           String   // Sea/Air
+  incoterm       String
+  hsCode         String?
+  computedStatus String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clearanceJobs ClearanceJob[]
+  freightJobs   FreightJob[]
+  checklists    JobChecklist[]
+}
+
+model MasterDocument {
+  id           String             @id @default(uuid())
+  name         String             @unique
+  abbreviation String
+  type         MasterDocumentType
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  rules        DocumentRule[]
+  hsRules      HSRule[]
+  checklists   JobChecklist[]
+}
+
+model DocumentRule {
+  id               String         @id @default(uuid())
+  masterDocumentId String
+  masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
+  direction        String         // Import, Export, ANY
+  mode             String         // Sea, Air, ANY
+  incoterm         String?
+  stageRequired    String?
+  isMandatory      Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model HSRule {
+  id               String         @id @default(uuid())
+  masterDocumentId String
+  masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
+  hsCode           String
+  isApproved       Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model JobChecklist {
+  id               String         @id @default(uuid())
+  masterJobId      String
+  masterJob        MasterJob      @relation(fields: [masterJobId], references: [id])
+  masterDocumentId String
+  masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
+  status           ChecklistStatus @default(MISSING)
+  filePath         String?
+  overrideReason   String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
