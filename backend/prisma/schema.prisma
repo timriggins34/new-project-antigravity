@@ -343,6 +343,7 @@ enum ChecklistStatus {
   MISSING
   VERIFY
   DONE
+  IGNORED
 }
 
 model MasterJob {
@@ -407,6 +408,8 @@ model JobChecklist {
   masterDocumentId String
   masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
   status           ChecklistStatus @default(MISSING)
+  stage            String?
+  isMandatory      Boolean        @default(true)
   filePath         String?
   overrideReason   String?
   createdAt        DateTime @default(now())

@@ -175,11 +175,11 @@ app.post('/api/vendors', async (req, res) => {
 app.get('/api/clearance-jobs', async (req, res) => {
   try {
     const jobs = await prisma.clearanceJob.findMany({
-      include: { 
-        hsCodeItems: true, 
-        vendors: true, 
+      include: {
+        hsCodeItems: true,
+        vendors: true,
         assignedTo: { select: { id: true, name: true } },
-        documents: true 
+        documents: true
       }
     });
     res.json(jobs);
@@ -253,14 +253,14 @@ app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const { 
-      documentName, 
-      entityType, 
-      entityId, 
-      clientId, 
-      docJobId, 
-      vendorId, 
-      clearanceJobId, 
+    const {
+      documentName,
+      entityType,
+      entityId,
+      clientId,
+      docJobId,
+      vendorId,
+      clearanceJobId,
       logisticsTripId,
       jobChecklistId
     } = req.body;
@@ -284,9 +284,10 @@ app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
     if (jobChecklistId) {
       await prisma.jobChecklist.update({
         where: { id: jobChecklistId },
-        data: { 
+        data: {
           status: 'VERIFY',
-          filePath: req.file.path
+          filePath: req.file.path,
+          overrideReason: null // Reset override reason if a file is uploaded
         }
       });
     }
@@ -351,15 +352,15 @@ app.patch('/api/doc-jobs/:id', async (req, res) => {
 
 // --- LOGISTICS TRIPS ---
 app.get('/api/logistics-trips', async (req, res) => {
-  try { 
+  try {
     const trips = await prisma.logisticsTrip.findMany({
-      include: { 
+      include: {
         assignedTo: { select: { id: true, name: true } },
-        documents: true 
+        documents: true
       }
-    }); 
-    res.json(trips); 
-  } 
+    });
+    res.json(trips);
+  }
   catch (error) { res.status(500).json({ error: 'Failed to fetch trips' }); }
 });
 
@@ -369,9 +370,9 @@ app.patch('/api/logistics/:id/status', async (req, res) => {
     const { status } = req.body;
     const updated = await prisma.logisticsTrip.update({
       where: { trip_id: req.params.id },
-      data: { 
+      data: {
         status,
-        delayed: false 
+        delayed: false
       }
     });
     res.json(updated);
@@ -416,7 +417,7 @@ app.put('/api/logistics-trips/:id', async (req, res) => {
 
 // --- LICENCES ---
 app.get('/api/licences', async (req, res) => {
-  try { const licences = await prisma.licence.findMany(); res.json(licences); } 
+  try { const licences = await prisma.licence.findMany(); res.json(licences); }
   catch (error) { res.status(500).json({ error: 'Failed to fetch licences' }); }
 });
 
@@ -443,12 +444,12 @@ app.patch('/api/licences/:id/utilize', async (req, res) => {
 
 // --- FREIGHT JOBS ---
 app.get('/api/freight-jobs', async (req, res) => {
-  try { 
+  try {
     const freight = await prisma.freightJob.findMany({
       include: { vendors: true }
-    }); 
-    res.json(freight); 
-  } 
+    });
+    res.json(freight);
+  }
   catch (error) { res.status(500).json({ error: 'Failed to fetch freight jobs' }); }
 });
 
@@ -495,40 +496,91 @@ app.post('/api/master-jobs', async (req, res) => {
     const standardRules = await prisma.documentRule.findMany({
       where: {
         AND: [
-          { direction: { in: [direction, 'ANY'] } },
-          { mode: { in: [mode, 'ANY'] } },
-          { OR: [{ incoterm: incoterm }, { incoterm: 'ANY' }, { incoterm: null }] }
+          {
+            OR: [
+              { direction: { equals: direction, mode: 'insensitive' } },
+              { direction: { equals: 'ANY', mode: 'insensitive' } }
+            ]
+          },
+          {
+            OR: [
+              { mode: { equals: mode, mode: 'insensitive' } },
+              { mode: { equals: 'ANY', mode: 'insensitive' } }
+            ]
+          },
+          {
+            OR: [
+              { incoterm: { equals: incoterm, mode: 'insensitive' } },
+              { incoterm: { equals: 'ANY', mode: 'insensitive' } },
+              { incoterm: null }
+            ]
+          }
         ]
       }
     });
+
+    console.log(`[Checklist Gen] Found ${standardRules.length} matching standard rules for ${direction}/${mode}/${incoterm}`);
+
 
     // 4. Check HS Code specific rules
     let hsRules = [];
     if (hsCode) {
       hsRules = await prisma.hSRule.findMany({
-        where: { hsCode, isApproved: true }
+        where: {
+          hsCode: { equals: hsCode, mode: 'insensitive' },
+          isApproved: true
+        }
       });
+      console.log(`[Checklist Gen] Found ${hsRules.length} HS-specific rules for code: ${hsCode}`);
     }
 
-    // Collect all MasterDocument IDs
-    const docIds = new Set();
-    standardRules.forEach(r => docIds.add(r.masterDocumentId));
-    hsRules.forEach(r => docIds.add(r.masterDocumentId));
 
     // 5. Create JobChecklist entries
-    if (docIds.size > 0) {
-      const checklistData = Array.from(docIds).map(docId => ({
-        masterJobId: masterJob.id,
-        masterDocumentId: docId,
-        status: 'MISSING'
-      }));
+    // We want to preserve the stageRequired and isMandatory from the matching rule
+    const checklistItems = [];
+    const processedDocIds = new Set();
 
+    // Prioritize standard rules for stage info and mandatory flag
+    standardRules.forEach(rule => {
+      if (!processedDocIds.has(rule.masterDocumentId)) {
+        checklistItems.push({
+          masterJobId: masterJob.id,
+          masterDocumentId: rule.masterDocumentId,
+          stage: rule.stageRequired || 'General',
+          isMandatory: rule.isMandatory === true, // Explicitly boolean check
+          status: 'MISSING'
+        });
+        processedDocIds.add(rule.masterDocumentId);
+      }
+    });
+
+    // Add HS rules if not already added
+    hsRules.forEach(rule => {
+      if (!processedDocIds.has(rule.masterDocumentId)) {
+        checklistItems.push({
+          masterJobId: masterJob.id,
+          masterDocumentId: rule.masterDocumentId,
+          stage: 'Customs', // Default stage for HS specific docs if not in rules
+          isMandatory: true, // HS specific docs are typically mandatory
+          status: 'MISSING'
+        });
+        processedDocIds.add(rule.masterDocumentId);
+      }
+    });
+
+    if (checklistItems.length > 0) {
       await prisma.jobChecklist.createMany({
-        data: checklistData
+        data: checklistItems
       });
+      console.log(`[Checklist Gen] Created ${checklistItems.length} checklist entries for Job ${jobNo}`);
+      // Debug: print count of mandatory vs optional
+      const manCount = checklistItems.filter(i => i.isMandatory).length;
+      const optCount = checklistItems.filter(i => !i.isMandatory).length;
+      console.log(`   -> Mandatory: ${manCount}, Optional: ${optCount}`);
     }
 
     res.status(201).json(masterJob);
+
   } catch (error) {
     console.error('Master Job creation failed:', error);
     res.status(500).json({ error: 'Failed to create Master Job and Checklist' });
@@ -540,16 +592,39 @@ app.get('/api/master-jobs/:id/checklist', async (req, res) => {
     const checklist = await prisma.jobChecklist.findMany({
       where: { masterJobId: req.params.id },
       include: {
-        masterDocument: {
-          include: { rules: true }
-        }
-      }
+        masterDocument: true
+      },
+      orderBy: { createdAt: 'asc' }
     });
+    
+    // Explicitly logging the first item's isMandatory flag for debug
+    if (checklist.length > 0) {
+      console.log(`[API] Returning ${checklist.length} items. First item isMandatory: ${checklist[0].isMandatory}`);
+    }
+    
     res.json(checklist);
+
   } catch (error) {
+    console.error('Fetch checklist failed:', error);
     res.status(500).json({ error: 'Failed to fetch checklist' });
   }
 });
+
+app.patch('/api/master-jobs/checklist/:id', async (req, res) => {
+  try {
+    const { status, overrideReason } = req.body;
+    const updated = await prisma.jobChecklist.update({
+      where: { id: req.params.id },
+      data: { status, overrideReason }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Checklist update failed:', error);
+    res.status(500).json({ error: 'Failed to update checklist item' });
+  }
+});
+
+
 
 
 app.put('/api/freight-jobs/:id', async (req, res) => {

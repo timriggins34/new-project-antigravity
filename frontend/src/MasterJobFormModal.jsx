@@ -15,7 +15,7 @@ export default function MasterJobFormModal({ isOpen, onClose, onSuccess, clients
 
   useEffect(() => {
     if (isOpen && clients?.length > 0 && !formData.clientId) {
-      setFormData(prev => ({ ...prev, clientId: clients[0].id }));
+      setFormData(prev => ({ ...prev, clientId: clients[0].dbId }));
     }
   }, [isOpen, clients]);
 
@@ -66,7 +66,7 @@ export default function MasterJobFormModal({ isOpen, onClose, onSuccess, clients
           <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
             <label>Select Client * 
               <select name="clientId" value={formData.clientId} onChange={handleChange} required>
-                {clients?.map(c => <option key={c.id} value={c.id}>{c.name} ({c.nickname})</option>)}
+                {clients?.map(c => <option key={c.id} value={c.dbId}>{c.name} ({c.nickname})</option>)}
               </select>
             </label>
           </div>

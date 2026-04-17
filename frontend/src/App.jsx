@@ -280,7 +280,7 @@ function App() {
 
 
 
-      const mappedClients = clients.map(d => ({ ...d, id: d.client_id }));
+      const mappedClients = clients.map(d => ({ ...d, dbId: d.id, id: d.client_id }));
       const mappedVendors = vendors.map(d => ({ ...d, id: d.vendor_id }));
       const mappedFreight = freight.map(d => ({ ...d, id: d.job_id }));
       const mappedDocJobs = docJobsRes.map(d => ({ ...d, id: d.job_id }));

@@ -6,35 +6,58 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  // Use path relative to the script location
   const filePath = path.join(__dirname, 'rules_matrix.csv');
   const results = [];
+  let headers = [];
 
-  console.log(`Reading CSV from ${filePath}...`);
+  console.log('--- Rules Import Debugger ---');
+  console.log(`Target Path: ${filePath}`);
 
   if (!fs.existsSync(filePath)) {
-    console.error(`Error: File not found at ${filePath}`);
+    console.error(`CRITICAL: File not found at ${filePath}`);
     process.exit(1);
   }
 
+  console.log('Reading file stream...');
+
   fs.createReadStream(filePath)
     .pipe(csv())
+    .on('headers', (headerList) => {
+      headers = headerList;
+      console.log('Detected CSV Headers:', headers);
+    })
     .on('data', (data) => results.push(data))
     .on('end', async () => {
-      console.log(`Parsed ${results.length} rows. Starting database sync...`);
+      console.log(`Parsed ${results.length} rows from CSV.`);
+      
+      if (results.length === 0) {
+        console.warn('WARNING: No rows were parsed from the CSV. Please check the file encoding or content.');
+        return;
+      }
+
+      console.log('Starting DB sync with aggressive logging...');
       
       try {
+        let successCount = 0;
+        let skippedCount = 0;
+
         for (const row of results) {
-          const docName = row['Name']?.trim();
+          // Use the EXACT headers provided by user in the latest request
+          const docName = row['Document Name']?.trim();
           const abbr = row['Abbreviation']?.trim();
           let typeStr = row['Type']?.trim().toUpperCase();
 
-          if (!docName) continue;
+          if (!docName) {
+            console.log(`[SKIP] Row missing 'Document Name'. Headers detected were:`, headers);
+            skippedCount++;
+            continue;
+          }
+
+          console.log(`[PROCESS] Found Document: "${docName}"`);
 
           // Map Type to Enum (SHIPMENT, ONE_TIME, RECURRING, CONTAINER)
           const validTypes = ['SHIPMENT', 'ONE_TIME', 'RECURRING', 'CONTAINER'];
           if (!validTypes.includes(typeStr)) {
-            // Default to SHIPMENT if type is unknown or missing
             typeStr = 'SHIPMENT';
           }
 
@@ -52,38 +75,28 @@ async function main() {
             },
           });
 
-          // 2. Clear existing rules for this document to ensure idempotency
+          // 2. Clear existing rules for this document for idempotency
           await prisma.documentRule.deleteMany({
             where: { masterDocumentId: masterDoc.id }
           });
 
           const rulesToCreate = [];
 
-          // Helper to check cell value based on user logic:
-          // 'Mandatory' (M) -> true, 'Optional' (O) -> false, others -> skip
-          const getMandatory = (val) => {
-            if (!val) return null;
-            const normalized = val.trim().toLowerCase();
-            if (normalized === 'mandatory' || normalized === 'm') return true;
-            if (normalized === 'optional' || normalized === 'o') return true; // Wait, user said "If 'O', set isMandatory = false"
-            // Let me correct that
-            return null;
-          };
-
           const checkMandatory = (val) => {
             if (!val) return null;
             const normalized = val.trim().toLowerCase();
+            // 'M' for Mandatory, 'O' for Optional
             if (normalized === 'mandatory' || normalized === 'm') return { isMandatory: true };
             if (normalized === 'optional' || normalized === 'o') return { isMandatory: false };
             return null;
           };
 
-          // Logic for combinations
+          // Define combinations based on NEW exact CSV headers
           const combinations = [
-            { col: 'Sea Import', direction: 'Import', mode: 'Sea', stageCol: 'Import' },
-            { col: 'Air Import', direction: 'Import', mode: 'Air', stageCol: 'Import' },
-            { col: 'Sea Export', direction: 'Export', mode: 'Sea', stageCol: 'Export' },
-            { col: 'Air Export', direction: 'Export', mode: 'Air', stageCol: 'Export' },
+            { col: 'Sea Import', direction: 'Import', mode: 'Sea', stageCol: 'Import Stage' },
+            { col: 'Air Import', direction: 'Import', mode: 'Air', stageCol: 'Import Stage' },
+            { col: 'Sea Export', direction: 'Export', mode: 'Sea', stageCol: 'Export Stage' },
+            { col: 'Air Export', direction: 'Export', mode: 'Air', stageCol: 'Export Stage' },
           ];
 
           for (const combo of combinations) {
@@ -105,17 +118,28 @@ async function main() {
             await prisma.documentRule.createMany({
               data: rulesToCreate
             });
+            console.log(`   + Created ${rulesToCreate.length} rules for "${docName}"`);
+            successCount++;
+          } else {
+            console.log(`   ! No rules matched for "${docName}" (all direction columns were empty)`);
           }
-
-          console.log(`Synced rules for document: "${docName}" (${rulesToCreate.length} rules created)`);
         }
-        console.log('\n--- Rules Import Completed Successfully ---');
+
+        console.log('\n--- Final Summary ---');
+        console.log(`Successfully processed: ${successCount} documents`);
+        console.log(`Skipped rows: ${skippedCount}`);
+        console.log('----------------------');
+
       } catch (error) {
-        console.error('Error during database sync:', error);
+        console.error('CRITICAL DATABASE ERROR during sync:', error);
       } finally {
         await prisma.$disconnect();
+        console.log('Database disconnected.');
       }
     });
 }
 
-main();
+main().catch(err => {
+  console.error('FATAL SCRIPT ERROR:', err);
+  process.exit(1);
+});
