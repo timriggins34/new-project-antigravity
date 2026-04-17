@@ -8,6 +8,8 @@ const path = require('path');
 const fs = require('fs');
 const { verifyToken, restrictIP } = require('./middleware/auth');
 const { upload, UPLOAD_ROOT } = require('./utils/storage');
+const { generateMasterJobNo } = require('./utils/idGenerator');
+
 
 const app = express();
 const prisma = new PrismaClient();
@@ -259,8 +261,10 @@ app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
       docJobId, 
       vendorId, 
       clearanceJobId, 
-      logisticsTripId 
+      logisticsTripId,
+      jobChecklistId
     } = req.body;
+
 
     // Save metadata to DB
     const document = await prisma.document.create({
@@ -271,9 +275,22 @@ app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
         docJobId: docJobId || null,
         vendorId: vendorId || null,
         clearanceJobId: clearanceJobId || null,
-        logisticsTripId: logisticsTripId || null
+        logisticsTripId: logisticsTripId || null,
+        jobChecklistId: jobChecklistId || null
       }
     });
+
+    // If it's a checklist upload, update the checklist status
+    if (jobChecklistId) {
+      await prisma.jobChecklist.update({
+        where: { id: jobChecklistId },
+        data: { 
+          status: 'VERIFY',
+          filePath: req.file.path
+        }
+      });
+    }
+
 
     res.status(201).json(document);
   } catch (error) {
@@ -434,6 +451,106 @@ app.get('/api/freight-jobs', async (req, res) => {
   } 
   catch (error) { res.status(500).json({ error: 'Failed to fetch freight jobs' }); }
 });
+
+// --- MASTER JOBS & SMART CHECKLISTS ---
+
+app.get('/api/master-jobs', async (req, res) => {
+  try {
+    const jobs = await prisma.masterJob.findMany({
+      include: {
+        client: { select: { name: true, nickname: true } },
+        checklists: {
+          include: { masterDocument: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch master jobs' });
+  }
+});
+
+app.post('/api/master-jobs', async (req, res) => {
+  try {
+    const { clientId, direction, mode, incoterm, hsCode } = req.body;
+
+    // 1. Generate Custom jobNo
+    const jobNo = await generateMasterJobNo(direction, prisma);
+
+    // 2. Create MasterJob
+    const masterJob = await prisma.masterJob.create({
+      data: {
+        jobNo,
+        clientId,
+        direction,
+        mode,
+        incoterm,
+        hsCode,
+        computedStatus: 'PENDING'
+      }
+    });
+
+    // 3. Generate Checklist based on DocumentRules
+    const standardRules = await prisma.documentRule.findMany({
+      where: {
+        AND: [
+          { direction: { in: [direction, 'ANY'] } },
+          { mode: { in: [mode, 'ANY'] } },
+          { OR: [{ incoterm: incoterm }, { incoterm: 'ANY' }, { incoterm: null }] }
+        ]
+      }
+    });
+
+    // 4. Check HS Code specific rules
+    let hsRules = [];
+    if (hsCode) {
+      hsRules = await prisma.hSRule.findMany({
+        where: { hsCode, isApproved: true }
+      });
+    }
+
+    // Collect all MasterDocument IDs
+    const docIds = new Set();
+    standardRules.forEach(r => docIds.add(r.masterDocumentId));
+    hsRules.forEach(r => docIds.add(r.masterDocumentId));
+
+    // 5. Create JobChecklist entries
+    if (docIds.size > 0) {
+      const checklistData = Array.from(docIds).map(docId => ({
+        masterJobId: masterJob.id,
+        masterDocumentId: docId,
+        status: 'MISSING'
+      }));
+
+      await prisma.jobChecklist.createMany({
+        data: checklistData
+      });
+    }
+
+    res.status(201).json(masterJob);
+  } catch (error) {
+    console.error('Master Job creation failed:', error);
+    res.status(500).json({ error: 'Failed to create Master Job and Checklist' });
+  }
+});
+
+app.get('/api/master-jobs/:id/checklist', async (req, res) => {
+  try {
+    const checklist = await prisma.jobChecklist.findMany({
+      where: { masterJobId: req.params.id },
+      include: {
+        masterDocument: {
+          include: { rules: true }
+        }
+      }
+    });
+    res.json(checklist);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch checklist' });
+  }
+});
+
 
 app.put('/api/freight-jobs/:id', async (req, res) => {
   try {

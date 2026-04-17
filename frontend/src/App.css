@@ -365,3 +365,121 @@
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* Master Jobs Specific */
+.master-jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.master-jobs-table th {
+  padding: 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.master-jobs-table td {
+  padding: 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.clickable-row:hover {
+  background-color: rgba(56, 189, 248, 0.05);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.active { background-color: var(--success-text); box-shadow: 0 0 8px var(--success-text); }
+.status-dot.pending { background-color: var(--warning-text); }
+.status-dot.draft { background-color: var(--text-muted); }
+
+.mini-checklist-preview {
+  width: 120px;
+}
+
+.progress-bar-small {
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-large {
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.profile-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.profile-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-item .label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.profile-item .value {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.stat-mini {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.import { background-color: rgba(56, 189, 248, 0.1); color: var(--primary-color); }
+.badge.export { background-color: rgba(168, 85, 247, 0.1); color: #a855f7; }
+
+.btn-icon.delete:hover {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  border-color: var(--danger-text);
+}
+

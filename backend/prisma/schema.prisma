@@ -320,6 +320,9 @@ model Document {
   logisticsTripId String?
   logisticsTrip   LogisticsTrip? @relation(fields: [logisticsTripId], references: [id])
 
+  jobChecklistId  String?
+  jobChecklist    JobChecklist? @relation(fields: [jobChecklistId], references: [id])
+
   // Traceability
   createdById       String?
   createdBy         User?    @relation("DocumentCreator", fields: [createdById], references: [id])
@@ -344,7 +347,9 @@ enum ChecklistStatus {
 
 model MasterJob {
   id             String   @id @default(uuid())
+  jobNo          String   @unique
   clientId       String
+
   client         Client   @relation(fields: [clientId], references: [id])
   direction      String   // Import/Export
   mode           String   // Sea/Air
@@ -404,7 +409,8 @@ model JobChecklist {
   status           ChecklistStatus @default(MISSING)
   filePath         String?
   overrideReason   String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-}
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
+  documents        Document[]
+}

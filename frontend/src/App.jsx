@@ -57,6 +57,10 @@ import ClearanceDetailModal from './ClearanceDetailModal';
 import FreightDetailModal from './FreightDetailModal';
 import LogisticsDetailModal from './LogisticsDetailModal';
 import DispatchModal from './DispatchModal';
+import MasterJobList from './MasterJobList';
+import MasterJobFormModal from './MasterJobFormModal';
+import MasterJobDetailModal from './MasterJobDetailModal';
+
 
 function App() {
   const [user, setUser] = useState(null);
@@ -71,6 +75,10 @@ function App() {
   const [licenceFilter, setLicenceFilter] = useState('All');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [masterJobs, setMasterJobs] = useState([]);
+  const [isMasterJobModalOpen, setIsMasterJobModalOpen] = useState(false);
+  const [selectedMasterJob, setSelectedMasterJob] = useState(null);
+
 
   /**
    * Helper to include JWT token in all API requests automatically
@@ -133,7 +141,9 @@ function App() {
     { id: 'licences', label: 'Licences & Cert', icon: FileCheck2 },
     { id: 'logistics', label: 'Domestic Logistics', icon: Truck },
     { id: 'freight', label: 'Freight Forwarding', icon: Ship },
+    { id: 'master-jobs', label: 'Master Jobs', icon: Briefcase },
   ];
+
 
   // Customs Stages
   const stages = ['Filing', 'Assessment', 'Duty', 'Exam', 'OOC'];
@@ -255,7 +265,7 @@ function App() {
         headers: { 'Authorization': `Bearer ${currentToken}` }
       };
 
-      const [clients, vendors, freight, docJobsRes, logistics, clearance, licences, emps] = await Promise.all([
+      const [clients, vendors, freight, docJobsRes, logistics, clearance, licences, emps, masters] = await Promise.all([
         fetch('http://localhost:3000/api/clients', fetchOptions).then(r => { if (!r.ok) throw new Error('clients'); return r.json(); }),
         fetch('http://localhost:3000/api/vendors', fetchOptions).then(r => { if (!r.ok) throw new Error('vendors'); return r.json(); }),
         fetch('http://localhost:3000/api/freight-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('freight-jobs'); return r.json(); }),
@@ -264,7 +274,11 @@ function App() {
         fetch('http://localhost:3000/api/clearance-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('clearance-jobs'); return r.json(); }),
         fetch('http://localhost:3000/api/licences', fetchOptions).then(r => { if (!r.ok) throw new Error('licences'); return r.json(); }),
         fetch('http://localhost:3000/api/users/employees', fetchOptions).then(r => { if (!r.ok) throw new Error('employees'); return r.json(); }),
+        fetch('http://localhost:3000/api/master-jobs', fetchOptions).then(r => { if (!r.ok) throw new Error('master-jobs'); return r.json(); }),
       ]);
+
+
+
 
       const mappedClients = clients.map(d => ({ ...d, id: d.client_id }));
       const mappedVendors = vendors.map(d => ({ ...d, id: d.vendor_id }));
@@ -282,6 +296,9 @@ function App() {
       setClearanceJobs(mappedClearance);
       setLicencesData(mappedLicences);
       setEmployees(emps);
+      setMasterJobs(masters || []);
+
+
 
       setSelectedClient(prev => prev || (mappedClients[0]?.id ?? null));
       setSelectedVendor(prev => prev || (mappedVendors[0]?.id ?? null));
@@ -377,6 +394,17 @@ function App() {
       } catch (e) { alert('Failed to delete trip'); }
     }
   };
+
+  const handleDeleteMasterJob = async (id) => {
+    try {
+      const res = await authenticatedFetch(`http://localhost:3000/api/master-jobs/${id}`, { method: 'DELETE' });
+      if (res && res.ok) {
+        setSelectedMasterJob(null);
+        fetchAllData();
+      }
+    } catch (e) { alert('Failed to delete Master Job'); }
+  };
+
 
   const advanceJobStage = async (jobId) => {
     const job = clearanceJobs.find(j => j.id === jobId);
@@ -639,6 +667,22 @@ function App() {
         </header>
 
         {/* Global Modals */}
+        <MasterJobFormModal 
+          isOpen={isMasterJobModalOpen} 
+          onClose={() => setIsMasterJobModalOpen(false)} 
+          onSuccess={fetchAllData}
+          clients={clientsData}
+          authFetch={authenticatedFetch}
+        />
+        <MasterJobDetailModal 
+          isOpen={!!selectedMasterJob} 
+          onClose={() => setSelectedMasterJob(null)} 
+          job={selectedMasterJob}
+          onDelete={handleDeleteMasterJob}
+          authFetch={authenticatedFetch}
+          onRefresh={fetchAllData}
+        />
+
         <ClientFormModal 
           isOpen={isClientModalOpen || !!clientToEdit} 
           onClose={() => { setIsClientModalOpen(false); setClientToEdit(null); }} 
@@ -1361,7 +1405,16 @@ function App() {
           </div>
         )}
 
+        {activeTab === 'master-jobs' && (
+          <MasterJobList 
+            jobs={masterJobs} 
+            onCreateJob={() => setIsMasterJobModalOpen(true)}
+            onSelectJob={(job) => setSelectedMasterJob(job)}
+          />
+        )}
+
         {/* CLIENTS MODULE */}
+
         {activeTab === 'clients' && (
           <div className="dashboard-content">
             <div className="sub-header">
