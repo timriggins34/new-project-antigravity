@@ -7,6 +7,7 @@ export default function RuleLibraryModal({
   onSave, 
   allDocuments, 
   existingRules, 
+  disabledRuleIds,
   type 
 }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -124,25 +125,38 @@ export default function RuleLibraryModal({
                 {filteredDocs.map(doc => {
                   const selection = selections[doc.id];
                   const isSelected = !!selection?.selected;
+                  const isDisabled = disabledRuleIds?.includes(doc.id);
+                  const oppositeTypeLabel = type === 'mandatory' ? 'Optional' : 'Mandatory';
                   
                   return (
                     <tr 
                       key={doc.id} 
-                      className={isSelected ? 'row-selected' : ''} 
-                      onClick={() => toggleDoc(doc.id)} 
-                      style={{ cursor: 'pointer' }}
+                      className={`${isSelected ? 'row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`} 
+                      onClick={() => !isDisabled && toggleDoc(doc.id)} 
+                      style={{ 
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        opacity: isDisabled ? 0.5 : 1
+                      }}
                     >
                       <td style={{ padding: '0.4rem 0.5rem' }}>
-                        <div className={`checkbox-custom ${isSelected ? 'checked' : ''}`} style={{ width: '16px', height: '16px' }}>
+                        <div className={`checkbox-custom ${isSelected ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}`} style={{ width: '16px', height: '16px' }}>
                           {isSelected && <Check size={12} color="white" />}
                         </div>
                       </td>
                       <td style={{ padding: '0.4rem 0.5rem' }}>
-                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{doc.name}</div>
+                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
+                          {doc.name}
+                          {isDisabled && (
+                            <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.75rem' }}>
+                              (Selected in {oppositeTypeLabel})
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '0.4rem 0.5rem' }}>
                         <span className="badge-outline" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>{doc.abbreviation}</span>
                       </td>
+
                       <td style={{ padding: '0.4rem 0.5rem' }} onClick={(e) => e.stopPropagation()}>
                         <select 
                           className="form-input" 

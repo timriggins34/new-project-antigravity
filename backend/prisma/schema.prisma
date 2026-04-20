@@ -55,6 +55,22 @@ model User {
   // Assigned Tasks
   assignedClearanceJobs ClearanceJob[] @relation("ClearanceJobAssignee")
   assignedLogisticsTrips LogisticsTrip[] @relation("LogisticsTripAssignee")
+  ruleAuditLogs          RuleAuditLog[]
+}
+
+model RuleAuditLog {
+  id               String   @id @default(uuid())
+  direction        String
+  mode             String
+  incoterm         String?
+  hsCode           String?
+  addedMandatory   Int
+  removedMandatory Int
+  addedOptional    Int
+  removedOptional  Int
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  createdAt        DateTime @default(now())
 }
 
 model AuditLog {

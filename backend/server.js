@@ -616,12 +616,28 @@ app.put('/api/freight-jobs/:id', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to update freight job' }); }
 });
 
+app.get('/api/document-rules/audit-logs', async (req, res) => {
+  try {
+    const logs = await prisma.ruleAuditLog.findMany({
+      take: 50,
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { name: true } } }
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error('Audit Fetch Error:', error);
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+});
+
 app.get('/api/document-rules/matrix', async (req, res) => {
   try {
-    const direction = req.query.direction || 'ANY';
-    const mode = req.query.mode || 'ANY';
-    const incoterm = req.query.incoterm === 'ANY' || !req.query.incoterm ? null : req.query.incoterm;
-    const hsCode = req.query.hsCode || null;
+    const { direction, mode, incoterm } = req.query;
+    const finalIncoterm = incoterm === 'ANY' || !incoterm ? null : incoterm;
+    
+    // For GET Matrix display, we only take the FIRST HS code if a list is provided
+    const rawHsCode = req.query.hsCode || '';
+    const hsCode = rawHsCode.includes(',') ? rawHsCode.split(',')[0].trim() : (rawHsCode || null);
     
     const hierarchy = [
       { direction, mode, incoterm, hsCode },
@@ -657,59 +673,152 @@ app.post('/api/document-rules/sync', async (req, res) => {
   try {
     const { direction, mode, incoterm, hsCode, rules } = req.body;
     const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
-    const finalHsCode = hsCode || null;
     
-    await prisma.$transaction([
-      prisma.documentRule.deleteMany({
+    // Batch processing: Split HS codes by comma
+    const hsCodesArray = hsCode && String(hsCode).trim() 
+      ? hsCode.split(',').map(code => code.trim()).filter(Boolean) 
+      : [null];
+
+    const allOperations = [];
+    
+    for (const code of hsCodesArray) {
+      const finalHsCode = code === 'ANY' ? null : (code || null);
+      
+      // Calculate Diffs for Audit Log
+      const oldRules = await prisma.documentRule.findMany({
         where: {
           direction: direction || 'ANY',
           mode: mode || 'ANY',
           incoterm: finalIncoterm,
           hsCode: finalHsCode
         }
-      }),
-      prisma.documentRule.createMany({
-        data: rules.map(r => ({
-          masterDocumentId: r.masterDocumentId,
-          direction: direction || 'ANY',
-          mode: mode || 'ANY',
-          incoterm: finalIncoterm,
-          hsCode: finalHsCode,
-          stageRequired: r.stageRequired,
-          isMandatory: r.isMandatory
-        }))
-      })
-    ]);
+      });
 
-    
+      const oldMandatoryCount = oldRules.filter(r => r.isMandatory).length;
+      const oldOptionalCount = oldRules.filter(r => !r.isMandatory).length;
+      const newMandatoryCount = rules.filter(r => r.isMandatory).length;
+      const newOptionalCount = rules.filter(r => !r.isMandatory).length;
+
+      // Only add Audit Log if there's actually a change (or rules being added/removed)
+      const oldSig = oldRules.map(r => `${r.masterDocumentId}-${r.stageRequired}-${r.isMandatory}`).sort().join('|');
+      const newSig = rules.map(r => `${r.masterDocumentId}-${r.stageRequired}-${r.isMandatory}`).sort().join('|');
+      
+      if (oldSig !== newSig) {
+        allOperations.push(
+          prisma.ruleAuditLog.create({
+            data: {
+              direction: direction || 'ANY',
+              mode: mode || 'ANY',
+              incoterm: finalIncoterm,
+              hsCode: finalHsCode,
+              addedMandatory: newMandatoryCount,
+              removedMandatory: oldMandatoryCount,
+              addedOptional: newOptionalCount,
+              removedOptional: oldOptionalCount,
+              userId: req.user.id
+            }
+          })
+        );
+      }
+
+      allOperations.push(
+        prisma.documentRule.deleteMany({
+          where: {
+            direction: direction || 'ANY',
+            mode: mode || 'ANY',
+            incoterm: finalIncoterm,
+            hsCode: finalHsCode
+          }
+        })
+      );
+      
+      if (rules && rules.length > 0) {
+        allOperations.push(
+          prisma.documentRule.createMany({
+            data: rules.map(r => ({
+              masterDocumentId: r.masterDocumentId,
+              direction: direction || 'ANY',
+              mode: mode || 'ANY',
+              incoterm: finalIncoterm,
+              hsCode: finalHsCode,
+              stageRequired: r.stageRequired,
+              isMandatory: r.isMandatory
+            }))
+          })
+        );
+      }
+    }
+
+    await prisma.$transaction(allOperations);
     res.json({ success: true });
   } catch (error) {
     console.error('Sync Error:', error);
-    res.status(500).json({ error: 'Failed to sync rules' });
+    res.status(500).json({ error: 'Failed to sync rules batch' });
   }
 });
+
 
 app.delete('/api/document-rules/reset', async (req, res) => {
   try {
     const { direction, mode, incoterm, hsCode } = req.query;
     const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
-    const finalHsCode = hsCode || null;
+    
+    const hsCodesArray = hsCode && String(hsCode).trim() 
+      ? hsCode.split(',').map(code => code.trim()).filter(Boolean) 
+      : [null];
 
-    await prisma.documentRule.deleteMany({
-      where: {
-        direction: direction || 'ANY',
-        mode: mode || 'ANY',
-        incoterm: finalIncoterm,
-        hsCode: finalHsCode
-      }
-    });
+    const allOperations = [];
+    
+    for (const code of hsCodesArray) {
+      const finalHsCode = code === 'ANY' ? null : (code || null);
+      
+      // Fetch existing to count removals
+      const oldRules = await prisma.documentRule.findMany({
+        where: {
+          direction: direction || 'ANY',
+          mode: mode || 'ANY',
+          incoterm: finalIncoterm,
+          hsCode: finalHsCode
+        }
+      });
+
+      allOperations.push(
+        prisma.ruleAuditLog.create({
+          data: {
+            direction: direction || 'ANY',
+            mode: mode || 'ANY',
+            incoterm: finalIncoterm,
+            hsCode: finalHsCode,
+            addedMandatory: 0,
+            removedMandatory: oldRules.filter(r => r.isMandatory).length,
+            addedOptional: 0,
+            removedOptional: oldRules.filter(r => !r.isMandatory).length,
+            userId: req.user.id
+          }
+        })
+      );
+
+      allOperations.push(
+        prisma.documentRule.deleteMany({
+          where: {
+            direction: direction || 'ANY',
+            mode: mode || 'ANY',
+            incoterm: finalIncoterm,
+            hsCode: finalHsCode
+          }
+        })
+      );
+    }
+
+    await prisma.$transaction(allOperations);
     res.json({ success: true });
-
   } catch (error) {
     console.error('Reset Error:', error);
-    res.status(500).json({ error: 'Failed to reset rules' });
+    res.status(500).json({ error: 'Failed to reset rules batch' });
   }
 });
+
+
 
 app.get('/api/master-documents', async (req, res) => {
   try {
