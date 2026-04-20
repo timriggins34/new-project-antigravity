@@ -477,9 +477,157 @@
 .badge.import { background-color: rgba(56, 189, 248, 0.1); color: var(--primary-color); }
 .badge.export { background-color: rgba(168, 85, 247, 0.1); color: #a855f7; }
 
-.btn-icon.delete:hover {
-  background-color: var(--danger-bg);
-  color: var(--danger-text);
-  border-color: var(--danger-text);
 }
 
+/* Rule Matrix Manager Styles */
+.rules-matrix-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.matrix-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  width: 100%;
+}
+
+.matrix-filters .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.matrix-filters label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.matrix-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.matrix-column {
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.column-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--bg-color);
+}
+
+.column-header h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-indicator.mandatory { background-color: var(--danger-text); }
+.status-indicator.optional { background-color: var(--primary-color); }
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 0.75rem;
+  overflow-y: auto;
+  max-height: 600px;
+}
+
+.matrix-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  justify-content: space-between;
+}
+
+.matrix-item .item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.matrix-item .doc-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.matrix-item .doc-stage {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.row-selected {
+  background-color: rgba(56, 189, 248, 0.05);
+}
+
+.checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.checkbox-custom.checked {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.matrix-item.inherited {
+  opacity: 0.65;
+  background-color: var(--bg-color);
+  border-style: dashed;
+}
+
+.inherited-badge {
+  background-color: var(--text-muted);
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.success-toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background-color: var(--success-color);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 11000;
+  animation: slideInUp 0.3s ease-out;
+  font-weight: 500;
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

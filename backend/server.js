@@ -492,26 +492,22 @@ app.post('/api/master-jobs', async (req, res) => {
       }
     });
 
-    // 3. Generate Checklist based on DocumentRules
-    const standardRules = await prisma.documentRule.findMany({
+    // 3. GENERATE SMART CHECKLIST (REFINED HIERARCHICAL ENGINE)
+    const allMatchingRules = await prisma.documentRule.findMany({
       where: {
         AND: [
-          {
+          { direction: { in: [direction, 'ANY'] } },
+          { mode: { in: [mode, 'ANY'] } },
+          { 
             OR: [
-              { direction: { equals: direction, mode: 'insensitive' } },
-              { direction: { equals: 'ANY', mode: 'insensitive' } }
+              { hsCode: hsCode || null },
+              { hsCode: null }
             ]
           },
           {
             OR: [
-              { mode: { equals: mode, mode: 'insensitive' } },
-              { mode: { equals: 'ANY', mode: 'insensitive' } }
-            ]
-          },
-          {
-            OR: [
-              { incoterm: { equals: incoterm, mode: 'insensitive' } },
-              { incoterm: { equals: 'ANY', mode: 'insensitive' } },
+              { incoterm: incoterm || null },
+              { incoterm: 'ANY' },
               { incoterm: null }
             ]
           }
@@ -519,67 +515,45 @@ app.post('/api/master-jobs', async (req, res) => {
       }
     });
 
-    console.log(`[Checklist Gen] Found ${standardRules.length} matching standard rules for ${direction}/${mode}/${incoterm}`);
+    const masterDocs = await prisma.masterDocument.findMany();
+    const checklistItems = [];
 
+    for (const doc of masterDocs) {
+      const docRules = allMatchingRules.filter(r => r.masterDocumentId === doc.id);
+      if (docRules.length === 0) continue;
 
-    // 4. Check HS Code specific rules
-    let hsRules = [];
-    if (hsCode) {
-      hsRules = await prisma.hSRule.findMany({
-        where: {
-          hsCode: { equals: hsCode, mode: 'insensitive' },
-          isApproved: true
-        }
+      // SPECIFICITY SCORING
+      docRules.sort((a, b) => {
+        const getScore = (r) => {
+          let score = 0;
+          if (r.hsCode === hsCode && r.hsCode !== null) score += 1000;
+          if (r.incoterm === incoterm && r.incoterm !== 'ANY' && r.incoterm !== null) score += 100;
+          if (r.mode === mode && r.mode !== 'ANY') score += 10;
+          if (r.direction === direction && r.direction !== 'ANY') score += 5;
+          return score || 1; // Base score of 1 for ANY/ANY/ANY/ANY
+        };
+        return getScore(b) - getScore(a);
       });
-      console.log(`[Checklist Gen] Found ${hsRules.length} HS-specific rules for code: ${hsCode}`);
+
+      const bestRule = docRules[0];
+      checklistItems.push({
+        masterJobId: masterJob.id,
+        masterDocumentId: doc.id,
+        stage: bestRule.stageRequired || 'General',
+        isMandatory: bestRule.isMandatory,
+        status: 'MISSING'
+      });
     }
 
 
-    // 5. Create JobChecklist entries
-    // We want to preserve the stageRequired and isMandatory from the matching rule
-    const checklistItems = [];
-    const processedDocIds = new Set();
-
-    // Prioritize standard rules for stage info and mandatory flag
-    standardRules.forEach(rule => {
-      if (!processedDocIds.has(rule.masterDocumentId)) {
-        checklistItems.push({
-          masterJobId: masterJob.id,
-          masterDocumentId: rule.masterDocumentId,
-          stage: rule.stageRequired || 'General',
-          isMandatory: rule.isMandatory === true, // Explicitly boolean check
-          status: 'MISSING'
-        });
-        processedDocIds.add(rule.masterDocumentId);
-      }
-    });
-
-    // Add HS rules if not already added
-    hsRules.forEach(rule => {
-      if (!processedDocIds.has(rule.masterDocumentId)) {
-        checklistItems.push({
-          masterJobId: masterJob.id,
-          masterDocumentId: rule.masterDocumentId,
-          stage: 'Customs', // Default stage for HS specific docs if not in rules
-          isMandatory: true, // HS specific docs are typically mandatory
-          status: 'MISSING'
-        });
-        processedDocIds.add(rule.masterDocumentId);
-      }
-    });
-
     if (checklistItems.length > 0) {
-      await prisma.jobChecklist.createMany({
-        data: checklistItems
-      });
-      console.log(`[Checklist Gen] Created ${checklistItems.length} checklist entries for Job ${jobNo}`);
-      // Debug: print count of mandatory vs optional
+      await prisma.jobChecklist.createMany({ data: checklistItems });
       const manCount = checklistItems.filter(i => i.isMandatory).length;
-      const optCount = checklistItems.filter(i => !i.isMandatory).length;
-      console.log(`   -> Mandatory: ${manCount}, Optional: ${optCount}`);
+      console.log(`[Checklist Gen] Created ${checklistItems.length} items for Job ${jobNo} (Mandatory: ${manCount})`);
     }
 
     res.status(201).json(masterJob);
+
 
   } catch (error) {
     console.error('Master Job creation failed:', error);
@@ -642,6 +616,103 @@ app.put('/api/freight-jobs/:id', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed to update freight job' }); }
 });
 
+app.get('/api/document-rules/matrix', async (req, res) => {
+  try {
+    const direction = req.query.direction || 'ANY';
+    const mode = req.query.mode || 'ANY';
+    const incoterm = req.query.incoterm === 'ANY' || !req.query.incoterm ? null : req.query.incoterm;
+    const hsCode = req.query.hsCode || null;
+    
+    const hierarchy = [
+      { direction, mode, incoterm, hsCode },
+      { direction, mode, incoterm, hsCode: null },
+      { direction, mode, incoterm: null, hsCode: null },
+      { direction, mode: 'ANY', incoterm: null, hsCode: null },
+      { direction: 'ANY', mode: 'ANY', incoterm: null, hsCode: null },
+    ];
+
+    for (let i = 0; i < hierarchy.length; i++) {
+      const rules = await prisma.documentRule.findMany({
+        where: hierarchy[i],
+        include: { masterDocument: true }
+      });
+
+      if (rules.length > 0) {
+        return res.json(rules.map(r => ({
+          ...r,
+          isInherited: i > 0 // If i=0, it's an exact match, else it's inherited
+        })));
+      }
+    }
+
+    res.json([]);
+  } catch (error) {
+    console.error('Matrix Fetch Error:', error);
+    res.status(500).json({ error: 'Failed to fetch rule matrix' });
+  }
+});
+
+
+app.post('/api/document-rules/sync', async (req, res) => {
+  try {
+    const { direction, mode, incoterm, hsCode, rules } = req.body;
+    
+    await prisma.$transaction([
+      prisma.documentRule.deleteMany({
+        where: {
+          direction: direction || 'ANY',
+          mode: mode || 'ANY',
+          incoterm: incoterm || null,
+          hsCode: hsCode || null
+        }
+      }),
+      prisma.documentRule.createMany({
+        data: rules.map(r => ({
+          masterDocumentId: r.masterDocumentId,
+          direction: direction || 'ANY',
+          mode: mode || 'ANY',
+          incoterm: incoterm || null,
+          hsCode: hsCode || null,
+          stageRequired: r.stageRequired,
+          isMandatory: r.isMandatory
+        }))
+      })
+    ]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Sync Error:', error);
+    res.status(500).json({ error: 'Failed to sync rules' });
+  }
+});
+
+app.delete('/api/document-rules/reset', async (req, res) => {
+  try {
+    const { direction, mode, incoterm, hsCode } = req.query;
+    await prisma.documentRule.deleteMany({
+      where: {
+        direction: direction || 'ANY',
+        mode: mode || 'ANY',
+        incoterm: incoterm || null,
+        hsCode: hsCode || null
+      }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Reset Error:', error);
+    res.status(500).json({ error: 'Failed to reset rules' });
+  }
+});
+
+app.get('/api/master-documents', async (req, res) => {
+  try {
+    const docs = await prisma.masterDocument.findMany({ orderBy: { name: 'asc' } });
+    res.json(docs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch master documents' });
+  }
+});
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('🔥 Server Error:', err.stack);
@@ -654,3 +725,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+

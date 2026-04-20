@@ -60,6 +60,8 @@ import DispatchModal from './DispatchModal';
 import MasterJobList from './MasterJobList';
 import MasterJobFormModal from './MasterJobFormModal';
 import MasterJobDetailModal from './MasterJobDetailModal';
+import RulesManager from './RulesManager';
+import { ShieldCheck } from 'lucide-react';
 
 
 function App() {
@@ -142,7 +144,10 @@ function App() {
     { id: 'logistics', label: 'Domestic Logistics', icon: Truck },
     { id: 'freight', label: 'Freight Forwarding', icon: Ship },
     { id: 'master-jobs', label: 'Master Jobs', icon: Briefcase },
+    { id: 'compliance-rules', label: 'Checklist Rules', icon: ShieldCheck },
   ];
+
+
 
 
   // Customs Stages
@@ -1413,6 +1418,11 @@ function App() {
           />
         )}
 
+        {activeTab === 'compliance-rules' && (
+          <RulesManager authFetch={authenticatedFetch} />
+        )}
+
+
         {/* CLIENTS MODULE */}
 
         {activeTab === 'clients' && (
@@ -1862,7 +1872,7 @@ function App() {
         )}
 
         {/* Placeholder for other tabs */}
-        {!['dashboard', 'clients', 'vendors', 'clearance', 'docs', 'licences', 'logistics', 'freight'].includes(activeTab) && (
+        {!['dashboard', 'clients', 'vendors', 'clearance', 'docs', 'licences', 'logistics', 'freight', 'master-jobs', 'compliance-rules'].includes(activeTab) && (
           <div className="dashboard-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
             <div style={{ textAlign: 'center' }}>
               <FolderOpenDot size={48} style={{ margin: '0 auto 1rem', color: 'var(--primary-color)' }} />

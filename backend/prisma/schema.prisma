@@ -374,7 +374,6 @@ model MasterDocument {
   updatedAt    DateTime           @updatedAt
 
   rules        DocumentRule[]
-  hsRules      HSRule[]
   checklists   JobChecklist[]
 }
 
@@ -382,24 +381,20 @@ model DocumentRule {
   id               String         @id @default(uuid())
   masterDocumentId String
   masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
-  direction        String         // Import, Export, ANY
-  mode             String         // Sea, Air, ANY
+  direction        String?        // Import, Export, ANY
+  mode             String?        // Sea, Air, ANY
   incoterm         String?
+  hsCode           String?
   stageRequired    String?
   isMandatory      Boolean        @default(false)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+
+  @@unique([masterDocumentId, direction, mode, incoterm, hsCode, isMandatory])
 }
 
-model HSRule {
-  id               String         @id @default(uuid())
-  masterDocumentId String
-  masterDocument   MasterDocument @relation(fields: [masterDocumentId], references: [id])
-  hsCode           String
-  isApproved       Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-}
+// HSRule is deprecated by DocumentRule.hsCode
+
 
 model JobChecklist {
   id               String         @id @default(uuid())
