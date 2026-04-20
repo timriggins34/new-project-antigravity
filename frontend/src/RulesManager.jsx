@@ -19,16 +19,17 @@ export default function RulesManager({ authFetch }) {
   const [filters, setFilters] = useState({
     direction: 'Import',
     mode: 'Sea',
-    incoterm: 'CIF',
+    incoterm: 'ANY',
     hsCode: ''
   });
 
   const [activeFilters, setActiveFilters] = useState({
     direction: 'Import',
     mode: 'Sea',
-    incoterm: 'CIF',
+    incoterm: 'ANY',
     hsCode: ''
   });
+
 
   const [rules, setRules] = useState([]); // This acts as our "Draft" state
   const [toast, setToast] = useState(null); // { message: string, type: 'success' | 'error' }

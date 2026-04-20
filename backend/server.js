@@ -656,14 +656,16 @@ app.get('/api/document-rules/matrix', async (req, res) => {
 app.post('/api/document-rules/sync', async (req, res) => {
   try {
     const { direction, mode, incoterm, hsCode, rules } = req.body;
+    const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
+    const finalHsCode = hsCode || null;
     
     await prisma.$transaction([
       prisma.documentRule.deleteMany({
         where: {
           direction: direction || 'ANY',
           mode: mode || 'ANY',
-          incoterm: incoterm || null,
-          hsCode: hsCode || null
+          incoterm: finalIncoterm,
+          hsCode: finalHsCode
         }
       }),
       prisma.documentRule.createMany({
@@ -671,13 +673,14 @@ app.post('/api/document-rules/sync', async (req, res) => {
           masterDocumentId: r.masterDocumentId,
           direction: direction || 'ANY',
           mode: mode || 'ANY',
-          incoterm: incoterm || null,
-          hsCode: hsCode || null,
+          incoterm: finalIncoterm,
+          hsCode: finalHsCode,
           stageRequired: r.stageRequired,
           isMandatory: r.isMandatory
         }))
       })
     ]);
+
     
     res.json({ success: true });
   } catch (error) {
@@ -689,15 +692,19 @@ app.post('/api/document-rules/sync', async (req, res) => {
 app.delete('/api/document-rules/reset', async (req, res) => {
   try {
     const { direction, mode, incoterm, hsCode } = req.query;
+    const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
+    const finalHsCode = hsCode || null;
+
     await prisma.documentRule.deleteMany({
       where: {
         direction: direction || 'ANY',
         mode: mode || 'ANY',
-        incoterm: incoterm || null,
-        hsCode: hsCode || null
+        incoterm: finalIncoterm,
+        hsCode: finalHsCode
       }
     });
     res.json({ success: true });
+
   } catch (error) {
     console.error('Reset Error:', error);
     res.status(500).json({ error: 'Failed to reset rules' });
