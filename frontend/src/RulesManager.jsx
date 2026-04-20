@@ -9,11 +9,52 @@ import {
   Binary,
   Edit3,
   Trash2,
-  Library
+  Library,
+  DownloadCloud
 } from 'lucide-react';
 import RuleLibraryModal from './RuleLibraryModal';
+import ImportRulesModal from './ImportRulesModal';
 
-const INCOTERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'];
+export const INCOTERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'];
+
+const formatType = (type) => {
+  if (!type) return 'Other';
+  return type.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+};
+
+const groupRulesByType = (rules) => {
+  const groups = {};
+  rules.forEach(rule => {
+    const type = rule.masterDocument.type || 'OTHER';
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(rule);
+  });
+
+  // Sort within groups
+  Object.keys(groups).forEach(type => {
+    groups[type].sort((a, b) => a.masterDocument.name.localeCompare(b.masterDocument.name));
+  });
+
+  // Category Order
+  const order = ['SHIPMENT', 'RECURRING', 'ONE_TIME', 'CONTAINER'];
+  
+  return Object.keys(groups)
+    .sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    })
+    .map(key => ({
+      type: key,
+      label: formatType(key),
+      items: groups[key]
+    }));
+};
 
 export default function RulesManager({ authFetch }) {
   const [filters, setFilters] = useState({
@@ -38,6 +79,7 @@ export default function RulesManager({ authFetch }) {
   const [allMasterDocs, setAllMasterDocs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalConfig, setModalConfig] = useState(null); // { type: 'mandatory' | 'optional' }
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const fetchMatrix = useCallback(async (searchParams) => {
     setLoading(true);
@@ -101,6 +143,20 @@ export default function RulesManager({ authFetch }) {
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleImport = (matrixData) => {
+    // Strip IDs and keep only necessary fields for the draft
+    const importedRules = matrixData.map(r => ({
+      masterDocumentId: r.masterDocumentId,
+      masterDocument: r.masterDocument,
+      stageRequired: r.stageRequired,
+      isMandatory: r.isMandatory
+    }));
+
+    setRules(importedRules);
+    setHasUnsavedChanges(true);
+    showToast('Rules imported as draft. Review and click Finalise to save.');
   };
 
   const handleSyncRules = (newRulesForType) => {
@@ -182,8 +238,8 @@ export default function RulesManager({ authFetch }) {
     fetchAuditLogs();
   }, [fetchLib, fetchAuditLogs]);
 
-  const mandatoryRules = rules.filter(r => r.isMandatory);
-  const optionalRules = rules.filter(r => !r.isMandatory);
+  const mandatoryGroups = groupRulesByType(rules.filter(r => r.isMandatory));
+  const optionalGroups = groupRulesByType(rules.filter(r => !r.isMandatory));
 
   // Normalize for comparison to avoid false positives (e.g. "" vs null)
   const normalize = (f) => ({
@@ -205,7 +261,7 @@ export default function RulesManager({ authFetch }) {
             fontWeight: 400,
             marginBottom: 0
           }}>
-            Define document requirements for specific job intersections
+            Checklist Matrix: {activeFilters.direction || 'Any'} &bull; {activeFilters.mode || 'Any'} &bull; {activeFilters.incoterm || 'Any'} {activeFilters.hsCode ? `&bull; HS ${activeFilters.hsCode}` : ''}
           </p>
         </div>
       </div>
@@ -293,19 +349,26 @@ export default function RulesManager({ authFetch }) {
             </div>
             
             <div className="rule-list">
-               {mandatoryRules.length === 0 ? (
+               {mandatoryGroups.length === 0 ? (
                  <div className="empty-state">No mandatory rules defined for this intersection.</div>
                ) : (
-                 mandatoryRules.map(rule => (
-                   <div key={rule.id} className={`matrix-item ${rule.isInherited ? 'inherited' : ''}`}>
-                      <div className="item-info">
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="doc-name">{rule.masterDocument.name}</span>
-                            {rule.isInherited && <span className="badge inherited-badge">Inherited</span>}
-                         </div>
-                         <span className="doc-stage">{rule.stageRequired}</span>
+                 mandatoryGroups.map(group => (
+                   <div key={group.type} className="rule-type-group">
+                      <div className="type-separator">
+                         <span>{group.label}</span>
                       </div>
-                      <ChevronRight size={14} color="var(--text-muted)" />
+                      {group.items.map(rule => (
+                        <div key={rule.id} className={`matrix-item ${rule.isInherited ? 'inherited' : ''}`}>
+                           <div className="item-info">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                 <span className="doc-name">{rule.masterDocument.name}</span>
+                                 {rule.isInherited && <span className="badge inherited-badge">Inherited</span>}
+                              </div>
+                              <span className="doc-stage">{rule.stageRequired}</span>
+                           </div>
+                           <ChevronRight size={14} color="var(--text-muted)" />
+                        </div>
+                      ))}
                    </div>
                  ))
                )}
@@ -328,22 +391,28 @@ export default function RulesManager({ authFetch }) {
             </div>
 
             <div className="rule-list">
-               {optionalRules.length === 0 ? (
+               {optionalGroups.length === 0 ? (
                  <div className="empty-state">No optional rules defined for this intersection.</div>
                ) : (
-                 optionalRules.map(rule => (
-                   <div key={rule.id} className={`matrix-item ${rule.isInherited ? 'inherited' : ''}`}>
-                      <div className="item-info">
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="doc-name">{rule.masterDocument.name}</span>
-                            {rule.isInherited && <span className="badge inherited-badge">Inherited</span>}
-                         </div>
-                         <span className="doc-stage">{rule.stageRequired}</span>
+                 optionalGroups.map(group => (
+                   <div key={group.type} className="rule-type-group">
+                      <div className="type-separator">
+                         <span>{group.label}</span>
                       </div>
-                      <ChevronRight size={14} color="var(--text-muted)" />
+                      {group.items.map(rule => (
+                        <div key={rule.id} className={`matrix-item ${rule.isInherited ? 'inherited' : ''}`}>
+                           <div className="item-info">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                 <span className="doc-name">{rule.masterDocument.name}</span>
+                                 {rule.isInherited && <span className="badge inherited-badge">Inherited</span>}
+                              </div>
+                              <span className="doc-stage">{rule.stageRequired}</span>
+                           </div>
+                           <ChevronRight size={14} color="var(--text-muted)" />
+                        </div>
+                      ))}
                    </div>
                  ))
-
                )}
             </div>
          </div>
@@ -352,36 +421,49 @@ export default function RulesManager({ authFetch }) {
       <div className="matrix-footer glass-card" style={{ 
           marginTop: '1.5rem', 
           display: 'flex', 
-          justifyContent: 'flex-end', 
-          gap: '1rem',
+          justifyContent: 'space-between', 
+          alignItems: 'center',
           padding: '1.25rem 2rem'
        }}>
-          <button 
-            className="btn-danger" 
-            onClick={handleDelete}
-            disabled={loading || rules.length === 0 || isDesynced}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            <Trash2 size={18} /> Delete Explicit Rules
-          </button>
-          <button 
-            className="btn-primary" 
-            onClick={handleFinalise}
-            disabled={loading || rules.length === 0 || isDesynced}
-            style={{ 
-              backgroundColor: isDesynced ? '#94a3b8' : '#2563eb', 
-              color: 'white',
-              borderColor: isDesynced ? '#94a3b8' : '#2563eb', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              padding: '0.75rem 2rem', 
-              fontSize: '1rem',
-              fontWeight: '600'
-            }}
-          >
-            <ShieldAlert size={18} /> Finalise Checklist Rules
-          </button>
+          <div className="footer-left">
+             <button 
+               className="btn-ghost" 
+               onClick={() => setIsImportModalOpen(true)}
+               disabled={loading || isDesynced}
+               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+             >
+                <DownloadCloud size={18} /> Import Rules
+             </button>
+          </div>
+
+          <div className="footer-right" style={{ display: 'flex', gap: '1rem' }}>
+             <button 
+               className="btn-danger" 
+               onClick={handleDelete}
+               disabled={loading || rules.length === 0 || isDesynced}
+               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+             >
+               <Trash2 size={18} /> Delete Explicit Rules
+             </button>
+             <button 
+               className="btn-primary" 
+               onClick={handleFinalise}
+               disabled={loading || rules.length === 0 || isDesynced}
+               style={{ 
+                 backgroundColor: isDesynced ? '#94a3b8' : '#2563eb', 
+                 color: 'white',
+                 borderColor: isDesynced ? '#94a3b8' : '#2563eb', 
+                 display: 'flex', 
+                 alignItems: 'center', 
+                 gap: '8px', 
+                 padding: '0.75rem 2rem', 
+                 fontSize: '1rem',
+                 fontWeight: '600'
+               }}
+            >
+              <ShieldAlert size={18} /> Finalise Checklist Rules
+            </button>
+          </div>
        </div>
 
        {/* Audit Trail Section */}
@@ -415,7 +497,7 @@ export default function RulesManager({ authFetch }) {
                             </td>
                             <td style={{ padding: '0.4rem 0.5rem' }}>
                                <div style={{ fontSize: '0.8rem' }}>
-                                  <span style={{ fontWeight: 600 }}>{log.direction}</span> ({log.mode})
+                                  <span style={{ fontWeight: 600 }}>{log.direction || 'Any'}</span> ({log.mode || 'Any'})
                                </div>
                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                                   {log.incoterm || 'Any'} | {log.hsCode || 'Any'}
@@ -451,17 +533,26 @@ export default function RulesManager({ authFetch }) {
          </div>
        )}
 
-      {modalConfig && (
-        <RuleLibraryModal 
-          isOpen={true}
-          onClose={() => setModalConfig(null)}
-          type={modalConfig?.type}
-          allDocuments={allMasterDocs}
-          existingRules={rules.filter(r => r.isMandatory === (modalConfig?.type === 'mandatory'))}
-          disabledRuleIds={rules.filter(r => r.isMandatory !== (modalConfig?.type === 'mandatory')).map(r => r.masterDocumentId)}
-          onSave={handleSyncRules}
-        />
-      )}
+       {isImportModalOpen && (
+         <ImportRulesModal 
+           isOpen={true}
+           onClose={() => setIsImportModalOpen(false)}
+           onImport={handleImport}
+           authFetch={authFetch}
+         />
+       )}
+
+       {modalConfig && (
+         <RuleLibraryModal 
+           isOpen={true}
+           onClose={() => setModalConfig(null)}
+           type={modalConfig.type}
+           allDocuments={allMasterDocs}
+           existingRules={rules.filter(r => r.isMandatory === (modalConfig.type === 'mandatory'))}
+           disabledRuleIds={rules.filter(r => r.isMandatory !== (modalConfig.type === 'mandatory')).map(r => r.masterDocumentId)}
+           onSave={handleSyncRules}
+         />
+       )}
     </div>
   );
 }

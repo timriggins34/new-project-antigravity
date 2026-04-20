@@ -496,8 +496,8 @@ app.post('/api/master-jobs', async (req, res) => {
     const allMatchingRules = await prisma.documentRule.findMany({
       where: {
         AND: [
-          { direction: { in: [direction, 'ANY'] } },
-          { mode: { in: [mode, 'ANY'] } },
+          { direction: { in: [direction, null] } },
+          { mode: { in: [mode, null] } },
           { 
             OR: [
               { hsCode: hsCode || null },
@@ -507,7 +507,6 @@ app.post('/api/master-jobs', async (req, res) => {
           {
             OR: [
               { incoterm: incoterm || null },
-              { incoterm: 'ANY' },
               { incoterm: null }
             ]
           }
@@ -527,10 +526,10 @@ app.post('/api/master-jobs', async (req, res) => {
         const getScore = (r) => {
           let score = 0;
           if (r.hsCode === hsCode && r.hsCode !== null) score += 1000;
-          if (r.incoterm === incoterm && r.incoterm !== 'ANY' && r.incoterm !== null) score += 100;
-          if (r.mode === mode && r.mode !== 'ANY') score += 10;
-          if (r.direction === direction && r.direction !== 'ANY') score += 5;
-          return score || 1; // Base score of 1 for ANY/ANY/ANY/ANY
+          if (r.incoterm === incoterm && r.incoterm !== null) score += 100;
+          if (r.mode === mode && r.mode !== null) score += 10;
+          if (r.direction === direction && r.direction !== null) score += 5;
+          return score || 1; // Base score of 1 for null/null/null/null
         };
         return getScore(b) - getScore(a);
       });
@@ -632,19 +631,21 @@ app.get('/api/document-rules/audit-logs', async (req, res) => {
 
 app.get('/api/document-rules/matrix', async (req, res) => {
   try {
-    const { direction, mode, incoterm } = req.query;
-    const finalIncoterm = incoterm === 'ANY' || !incoterm ? null : incoterm;
+    const normalize = (val) => (val === 'ANY' || !val) ? null : val;
+    const direction = normalize(req.query.direction);
+    const mode = normalize(req.query.mode);
+    const incoterm = normalize(req.query.incoterm);
     
     // For GET Matrix display, we only take the FIRST HS code if a list is provided
     const rawHsCode = req.query.hsCode || '';
-    const hsCode = rawHsCode.includes(',') ? rawHsCode.split(',')[0].trim() : (rawHsCode || null);
+    const hsCode = rawHsCode.includes(',') ? normalize(rawHsCode.split(',')[0]) : normalize(rawHsCode);
     
     const hierarchy = [
       { direction, mode, incoterm, hsCode },
       { direction, mode, incoterm, hsCode: null },
       { direction, mode, incoterm: null, hsCode: null },
-      { direction, mode: 'ANY', incoterm: null, hsCode: null },
-      { direction: 'ANY', mode: 'ANY', incoterm: null, hsCode: null },
+      { direction, mode: null, incoterm: null, hsCode: null },
+      { direction: null, mode: null, incoterm: null, hsCode: null },
     ];
 
     for (let i = 0; i < hierarchy.length; i++) {
@@ -660,7 +661,6 @@ app.get('/api/document-rules/matrix', async (req, res) => {
         })));
       }
     }
-
     res.json([]);
   } catch (error) {
     console.error('Matrix Fetch Error:', error);
@@ -671,8 +671,12 @@ app.get('/api/document-rules/matrix', async (req, res) => {
 
 app.post('/api/document-rules/sync', async (req, res) => {
   try {
-    const { direction, mode, incoterm, hsCode, rules } = req.body;
-    const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
+    const normalize = (val) => (val === 'ANY' || !val) ? null : val;
+    const { direction: rawDir, mode: rawMode, incoterm: rawInc, hsCode, rules } = req.body;
+    
+    const finalDirection = normalize(rawDir);
+    const finalMode = normalize(rawMode);
+    const finalIncoterm = normalize(rawInc);
     
     // Batch processing: Split HS codes by comma
     const hsCodesArray = hsCode && String(hsCode).trim() 
@@ -682,13 +686,13 @@ app.post('/api/document-rules/sync', async (req, res) => {
     const allOperations = [];
     
     for (const code of hsCodesArray) {
-      const finalHsCode = code === 'ANY' ? null : (code || null);
+      const finalHsCode = normalize(code);
       
       // Calculate Diffs for Audit Log
       const oldRules = await prisma.documentRule.findMany({
         where: {
-          direction: direction || 'ANY',
-          mode: mode || 'ANY',
+          direction: finalDirection,
+          mode: finalMode,
           incoterm: finalIncoterm,
           hsCode: finalHsCode
         }
@@ -707,8 +711,8 @@ app.post('/api/document-rules/sync', async (req, res) => {
         allOperations.push(
           prisma.ruleAuditLog.create({
             data: {
-              direction: direction || 'ANY',
-              mode: mode || 'ANY',
+              direction: finalDirection,
+              mode: finalMode,
               incoterm: finalIncoterm,
               hsCode: finalHsCode,
               addedMandatory: newMandatoryCount,
@@ -724,8 +728,8 @@ app.post('/api/document-rules/sync', async (req, res) => {
       allOperations.push(
         prisma.documentRule.deleteMany({
           where: {
-            direction: direction || 'ANY',
-            mode: mode || 'ANY',
+            direction: finalDirection,
+            mode: finalMode,
             incoterm: finalIncoterm,
             hsCode: finalHsCode
           }
@@ -737,8 +741,8 @@ app.post('/api/document-rules/sync', async (req, res) => {
           prisma.documentRule.createMany({
             data: rules.map(r => ({
               masterDocumentId: r.masterDocumentId,
-              direction: direction || 'ANY',
-              mode: mode || 'ANY',
+              direction: finalDirection,
+              mode: finalMode,
               incoterm: finalIncoterm,
               hsCode: finalHsCode,
               stageRequired: r.stageRequired,
@@ -760,8 +764,12 @@ app.post('/api/document-rules/sync', async (req, res) => {
 
 app.delete('/api/document-rules/reset', async (req, res) => {
   try {
-    const { direction, mode, incoterm, hsCode } = req.query;
-    const finalIncoterm = incoterm === 'ANY' ? null : (incoterm || null);
+    const normalize = (val) => (val === 'ANY' || !val) ? null : val;
+    const { direction: rawDir, mode: rawMode, incoterm: rawInc, hsCode } = req.query;
+    
+    const finalDirection = normalize(rawDir);
+    const finalMode = normalize(rawMode);
+    const finalIncoterm = normalize(rawInc);
     
     const hsCodesArray = hsCode && String(hsCode).trim() 
       ? hsCode.split(',').map(code => code.trim()).filter(Boolean) 
@@ -770,13 +778,13 @@ app.delete('/api/document-rules/reset', async (req, res) => {
     const allOperations = [];
     
     for (const code of hsCodesArray) {
-      const finalHsCode = code === 'ANY' ? null : (code || null);
+      const finalHsCode = normalize(code);
       
       // Fetch existing to count removals
       const oldRules = await prisma.documentRule.findMany({
         where: {
-          direction: direction || 'ANY',
-          mode: mode || 'ANY',
+          direction: finalDirection,
+          mode: finalMode,
           incoterm: finalIncoterm,
           hsCode: finalHsCode
         }
@@ -785,8 +793,8 @@ app.delete('/api/document-rules/reset', async (req, res) => {
       allOperations.push(
         prisma.ruleAuditLog.create({
           data: {
-            direction: direction || 'ANY',
-            mode: mode || 'ANY',
+            direction: finalDirection || 'ANY',
+            mode: finalMode || 'ANY',
             incoterm: finalIncoterm,
             hsCode: finalHsCode,
             addedMandatory: 0,
@@ -801,8 +809,8 @@ app.delete('/api/document-rules/reset', async (req, res) => {
       allOperations.push(
         prisma.documentRule.deleteMany({
           where: {
-            direction: direction || 'ANY',
-            mode: mode || 'ANY',
+            direction: finalDirection,
+            mode: finalMode,
             incoterm: finalIncoterm,
             hsCode: finalHsCode
           }
@@ -838,8 +846,46 @@ app.use((err, req, res, next) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Start Server and Run One-Shot Migration
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  
+  // DATA MIGRATION: Convert 'ANY' to null in DocumentRules
+  try {
+    const count = await prisma.documentRule.updateMany({
+      where: {
+        OR: [
+          { direction: 'ANY' },
+          { mode: 'ANY' },
+          { incoterm: 'ANY' }
+        ]
+      },
+      data: {
+        direction: null,
+        mode: null,
+        incoterm: null
+      }
+    });
+    
+    const auditCount = await prisma.ruleAuditLog.updateMany({
+       where: {
+         OR: [
+           { direction: 'ANY' },
+           { mode: 'ANY' }
+         ]
+       },
+       data: {
+         direction: null,
+         mode: null
+       }
+    });
+
+    if (count.count > 0 || auditCount.count > 0) {
+      console.log(`🧹 Migration: Sanitized ${count.count} Rules and ${auditCount.count} Audit Logs (converted 'ANY' to null).`);
+    }
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+  }
 });
 
 

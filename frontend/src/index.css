@@ -35,9 +35,39 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-pill: 9999px;
+  --bg-muted: #f1f5f9; /* Slate 100 */
   
   /* Transitions */
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Grouping Styles */
+.rule-type-group {
+  margin-bottom: 2rem;
+}
+
+.type-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.type-separator::before,
+.type-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--border-color);
+}
+
+.type-separator span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
 }
 
 * {

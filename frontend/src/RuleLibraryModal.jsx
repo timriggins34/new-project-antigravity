@@ -46,6 +46,42 @@ export default function RuleLibraryModal({
   }, [allDocuments, searchTerm, selections]);
 
 
+  const formatType = (type) => {
+    if (!type) return 'Other';
+    return type.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+  };
+
+  const groupedDocs = useMemo(() => {
+    const groups = {};
+    
+    // 1. Group documents
+    filteredDocs.forEach(doc => {
+      const typeKey = doc.type || 'OTHER';
+      if (!groups[typeKey]) groups[typeKey] = [];
+      groups[typeKey].push(doc);
+    });
+
+    // 2. Sort groups based on order
+    const order = ['SHIPMENT', 'RECURRING', 'ONE_TIME', 'CONTAINER'];
+    return Object.keys(groups)
+      .sort((a, b) => {
+        const idxA = order.indexOf(a);
+        const idxB = order.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b);
+      })
+      .map(key => ({
+        type: key,
+        label: formatType(key),
+        docs: groups[key]
+      }));
+  }, [filteredDocs]);
+
+
   const toggleDoc = (docId) => {
     setSelections(prev => {
       const current = prev[docId];
@@ -122,63 +158,87 @@ export default function RuleLibraryModal({
                 </tr>
               </thead>
               <tbody>
-                {filteredDocs.map(doc => {
-                  const selection = selections[doc.id];
-                  const isSelected = !!selection?.selected;
-                  const isDisabled = disabledRuleIds?.includes(doc.id);
-                  const oppositeTypeLabel = type === 'mandatory' ? 'Optional' : 'Mandatory';
-                  
-                  return (
-                    <tr 
-                      key={doc.id} 
-                      className={`${isSelected ? 'row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`} 
-                      onClick={() => !isDisabled && toggleDoc(doc.id)} 
-                      style={{ 
-                        cursor: isDisabled ? 'not-allowed' : 'pointer',
-                        opacity: isDisabled ? 0.5 : 1
-                      }}
-                    >
-                      <td style={{ padding: '0.4rem 0.5rem' }}>
-                        <div className={`checkbox-custom ${isSelected ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}`} style={{ width: '16px', height: '16px' }}>
-                          {isSelected && <Check size={12} color="white" />}
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.4rem 0.5rem' }}>
-                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
-                          {doc.name}
-                          {isDisabled && (
-                            <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.75rem' }}>
-                              (Selected in {oppositeTypeLabel})
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.4rem 0.5rem' }}>
-                        <span className="badge-outline" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>{doc.abbreviation}</span>
-                      </td>
-
-                      <td style={{ padding: '0.4rem 0.5rem' }} onClick={(e) => e.stopPropagation()}>
-                        <select 
-                          className="form-input" 
-                          disabled={!isSelected}
-                          value={selection?.stage || ''}
-                          onChange={(e) => updateStage(doc.id, e.target.value)}
-                          style={{ height: '28px', fontSize: '12px', padding: '0 4px' }}
-                        >
-                          <option value="Pre-Shipment">Pre-Shipment</option>
-                          <option value="Filing">Filing</option>
-                          <option value="Assessment">Assessment</option>
-                          <option value="Duty">Duty</option>
-                          <option value="Exam">Exam</option>
-                          <option value="OOC">OOC</option>
-                          <option value="Transit">Transit</option>
-                          <option value="Post-Shipment">Post-Shipment</option>
-                          <option value="General">General</option>
-                        </select>
+                {groupedDocs.map(group => (
+                  <React.Fragment key={group.type}>
+                    {/* Category Header Row */}
+                    <tr style={{ 
+                      position: 'sticky', 
+                      top: '36px', // Header height offset
+                      zIndex: 1, 
+                      backgroundColor: 'var(--bg-muted)', 
+                      borderBottom: '1px solid var(--border-color)'
+                    }}>
+                      <td colSpan="4" style={{ 
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.75rem', 
+                        fontWeight: '700', 
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px'
+                      }}>
+                        {group.label}
                       </td>
                     </tr>
-                  );
-                })}
+
+                    {group.docs.map(doc => {
+                      const selection = selections[doc.id];
+                      const isSelected = !!selection?.selected;
+                      const isDisabled = disabledRuleIds?.includes(doc.id);
+                      const oppositeTypeLabel = type === 'mandatory' ? 'Optional' : 'Mandatory';
+                      
+                      return (
+                        <tr 
+                          key={doc.id} 
+                          className={`${isSelected ? 'row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`} 
+                          onClick={() => !isDisabled && toggleDoc(doc.id)} 
+                          style={{ 
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isDisabled ? 0.5 : 1
+                          }}
+                        >
+                          <td style={{ padding: '0.4rem 0.5rem' }}>
+                            <div className={`checkbox-custom ${isSelected ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}`} style={{ width: '16px', height: '16px' }}>
+                              {isSelected && <Check size={12} color="white" />}
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.4rem 0.5rem' }}>
+                            <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
+                              {doc.name}
+                              {isDisabled && (
+                                <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.75rem' }}>
+                                  (Selected in {oppositeTypeLabel})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.4rem 0.5rem' }}>
+                            <span className="badge-outline" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>{doc.abbreviation}</span>
+                          </td>
+
+                          <td style={{ padding: '0.4rem 0.5rem' }} onClick={(e) => e.stopPropagation()}>
+                            <select 
+                              className="form-input" 
+                              disabled={!isSelected}
+                              value={selection?.stage || ''}
+                              onChange={(e) => updateStage(doc.id, e.target.value)}
+                              style={{ height: '28px', fontSize: '12px', padding: '0 4px' }}
+                            >
+                              <option value="Pre-Shipment">Pre-Shipment</option>
+                              <option value="Filing">Filing</option>
+                              <option value="Assessment">Assessment</option>
+                              <option value="Duty">Duty</option>
+                              <option value="Exam">Exam</option>
+                              <option value="OOC">OOC</option>
+                              <option value="Transit">Transit</option>
+                              <option value="Post-Shipment">Post-Shipment</option>
+                              <option value="General">General</option>
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
           </div>
@@ -192,6 +252,5 @@ export default function RuleLibraryModal({
         </div>
       </div>
     </div>
-
   );
 }
